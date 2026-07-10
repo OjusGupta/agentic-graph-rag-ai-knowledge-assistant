@@ -196,7 +196,17 @@
   .msg-label{font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-bottom:4px;}
   .msg-label.ai{color:var(--accent);}
   .msg-label.user{color:var(--ink-dim); text-align:right;}
-  .msg-text{font-size:13.5px; line-height:1.6; color:var(--ink); white-space:pre-line;}
+  .msg-text{font-size:13.5px; line-height:1.6; color:var(--ink);}
+  .msg-text p{margin:0 0 8px;}
+  .msg-text p:last-child{margin-bottom:0;}
+  .msg-text ul,.msg-text ol{margin:4px 0 8px; padding-left:20px;}
+  .msg-text li{margin-bottom:3px;}
+  .msg-text strong{color:var(--ink); font-weight:600;}
+  .msg-text code{font-family:'JetBrains Mono',monospace; font-size:12px; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; padding:1px 5px;}
+  .msg-text pre{background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; overflow-x:auto; margin:6px 0;}
+  .msg-text pre code{background:none; border:none; padding:0; font-size:12px;}
+  .msg-text h1,.msg-text h2,.msg-text h3{font-family:'Space Grotesk',sans-serif; font-weight:600; margin:10px 0 4px; color:var(--ink);}
+  .msg-text h1{font-size:15px;} .msg-text h2{font-size:14px;} .msg-text h3{font-size:13px;}
 
   .thinking{display:flex; align-items:center; gap:8px; max-width:760px; margin:0 auto 18px; font-size:11.5px; color:var(--ink-faint); font-family:'JetBrains Mono',monospace;}
   .thinking .spin{width:13px; height:13px; color:var(--accent); animation:spin 1s linear infinite;}
@@ -292,8 +302,8 @@
 
     <div class="telemetry">
       <div class="chip"><span class="dot live"></span> pipeline online</div>
-      <div class="chip" id="latency-chip">latency <b style="color:var(--ink); margin-left:3px;">38ms</b></div>
-      <div class="chip">nexus-embed-v2</div>
+      <div class="chip" id="latency-chip">latency <b id="latency-val" style="color:var(--ink); margin-left:3px;">--</b></div>
+      <div class="chip">bge-base-en-v1.5</div>
       <button class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle color theme"></button>
       <button class="icon-btn" title="Settings"><i data-lucide="settings-2"></i></button>
     </div>
@@ -322,10 +332,10 @@
       </div>
 
       <div class="corpus-panel">
-        <div class="corpus-row"><span>Vector chunks</span><b>11,798</b></div>
-        <div class="meter"><i style="width:78%;"></i></div>
-        <div class="corpus-row" style="margin-top:9px;"><span>Graph nodes</span><b>412 / 17 docs</b></div>
-        <div class="meter"><i style="width:54%; background:linear-gradient(90deg, var(--accent-2), var(--accent-2));"></i></div>
+        <div class="corpus-row"><span>Vector chunks</span><b>4,362</b></div>
+        <div class="meter"><i style="width:72%;"></i></div>
+        <div class="corpus-row" style="margin-top:9px;"><span>Graph nodes</span><b>16 / 17 docs</b></div>
+        <div class="meter"><i style="width:48%; background:linear-gradient(90deg, var(--accent-2), var(--accent-2));"></i></div>
       </div>
     </aside>
 
@@ -335,7 +345,7 @@
           <div class="avatar ai"><i data-lucide="workflow" style="width:15px;height:15px;"></i></div>
           <div class="bubble system">
             <div class="msg-label ai">system orchestrator</div>
-            <div class="msg-text">Your library is mapped into an active concept graph — 412 nodes across 17 documents. Ask a question and I'll trace the answer across every book it touches.</div>
+            <div class="msg-text">Your library is indexed — 4,362 chunks across 17 documents, linked into a 16-node concept graph. Ask anything and I'll trace the answer across every book it touches.</div>
           </div>
         </div>
       </div>
@@ -346,12 +356,24 @@
             <textarea id="query-input" rows="2" placeholder="Ask your corpus — e.g. how do SQL transactions relate to distributed consensus?" required></textarea>
             <div class="composer-tools">
               <select id="source-filter-select" class="font-mono" style="background:var(--surface-2); color:var(--ink-dim); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:10.5px; padding:3px 6px; outline:none; cursor:pointer;">
-                <option value="">📚 All Textbooks</option>
-                <option value="computer networks">🌐 Computer Networks</option>
-                <option value="java programming">☕ Java Programming</option>
-                <option value="os.pdf">🖥️ Operating Systems</option>
-                <option value="aws-general">☁️ AWS Reference</option>
-                <option value="artificial intelligence">🤖 Artificial Intelligence</option>
+                <option value="">All Textbooks</option>
+                <option value="(R17A1204) Artificial Intelligence.pdf">Artificial Intelligence</option>
+                <option value="Neural-Networks.pdf">Neural Networks (ANN)</option>
+                <option value="COMPUTER NETWORKS NOTES.pdf">Computer Networks</option>
+                <option value="DATA WAREHOUSING AND DATA MINING (R18A0524).pdf">Data Mining &amp; Warehousing</option>
+                <option value="DBMS.pdf">DBMS</option>
+                <option value="deep learning.pdf">Deep Learning</option>
+                <option value="DATA STRUCTURES DIGITAL NOTES.pdf">Data Structures (DSA)</option>
+                <option value="Java Programming.pdf">Java Programming</option>
+                <option value="LangChain_From_0_To_1_public_1_PpuSgEN.pdf">LangChain</option>
+                <option value="Introduction to Machine Learning with Python ( PDFDrive.com )-min.pdf">Machine Learning</option>
+                <option value="Natural Language Processing-1.pdf">NLP</option>
+                <option value="os.pdf">Operating Systems</option>
+                <option value="(R18A0513) Python Programming digital notes.pdf">Python Programming</option>
+                <option value="RAG.pdf">RAG</option>
+                <option value="RL.pdf">Reinforcement Learning</option>
+                <option value="SQL-Manual.pdf">SQL</option>
+                <option value="TOC.pdf">Theory of Computation</option>
               </select>
 
               <div class="kstep">
@@ -381,7 +403,7 @@
         <div id="graph-canvas-wrap">
           <canvas id="graph-canvas"></canvas>
         </div>
-        <div class="graph-caption"><span id="graph-nodes-label">14 nodes tracked</span><span id="graph-status">idle</span></div>
+        <div class="graph-caption"><span id="graph-nodes-label">16 nodes tracked</span><span id="graph-status">idle</span></div>
 
         <div style="margin-top:20px;">
           <div class="panel-heading">
@@ -475,19 +497,6 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'n'){ e.preventDefault(); createNewChat(); }
 });
 
-/* ============ MOCK DEMO CONTENT (used only if no backend is reachable) ============ */
-const DEMO_SOURCES = ['Database Systems Fundamentals.pdf', 'Distributed Consensus Notes.md', 'Systems Design Primer.pdf', 'Query Optimization Handbook.pdf'];
-function buildDemoAnswer(q){
-  return `Based on the retrieved sections, "${q}" connects two ideas your corpus treats separately but that share the same underlying guarantee: isolation of concurrent state changes. The first document frames this at the storage layer, the second at the cluster-coordination layer — the graph links them through a shared "atomic commit" concept node.`;
-}
-function buildDemoChunks(){
-  const n = Math.min(4, kValue + 1);
-  return Array.from({length:n}).map((_,i) => ({
-    source_file: DEMO_SOURCES[i % DEMO_SOURCES.length],
-    preview: 'A synthesized excerpt describing how the system reaches agreement before committing a change, covering ordering guarantees, rollback boundaries, and the failure cases each protocol is designed to tolerate.',
-    confidence: Math.round(60 + Math.random()*35)
-  }));
-}
 
 /* ============ CHAT SUBMIT ============ */
 document.getElementById('query-form').addEventListener('submit', async (e) => {
@@ -521,6 +530,7 @@ document.getElementById('query-form').addEventListener('submit', async (e) => {
   const filterElement = document.getElementById('source-filter-select');
   const selectedFilter = filterElement ? filterElement.value : "";
 
+  const t0 = performance.now();
   let data;
   try {
     const response = await fetch('/api/query', {
@@ -550,6 +560,8 @@ document.getElementById('query-form').addEventListener('submit', async (e) => {
 
   document.getElementById(loaderId)?.remove();
   document.getElementById('graph-status').textContent = 'resolved';
+  const ms = Math.round(performance.now() - t0);
+  document.getElementById('latency-val').textContent = ms + 'ms';
 
   // Show error from backend clearly if present
   if (data.error) {
@@ -568,7 +580,7 @@ document.getElementById('query-form').addEventListener('submit', async (e) => {
       <div class="avatar ai"><i data-lucide="sparkles" style="width:15px;height:15px;"></i></div>
       <div class="bubble system">
         <div class="msg-label ai">agent synthesis</div>
-        <div class="msg-text">${escapeHtml(data.answer || '⚠️ No answer returned.')}</div>
+        <div class="msg-text">${renderMarkdown(data.answer || 'No answer returned.')}</div>
       </div>
     </div>`);
 
@@ -603,6 +615,30 @@ function escapeHtml(str){
   return d.innerHTML;
 }
 
+function renderMarkdown(text){
+  // Minimal safe markdown: bold, inline code, code blocks, headers, bullets
+  let html = escapeHtml(text);
+  // Code blocks (must come before inline code)
+  html = html.replace(/```([\s\S]*?)```/g, (_, c) => `<pre><code>${c.trim()}</code></pre>`);
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bullet lists
+  html = html.replace(/^(\* |- )(.+)$/gm, '<li>$2</li>');
+  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+  // Numbered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Line breaks to paragraphs
+  html = html.replace(/\n{2,}/g, '</p><p>');
+  html = html.replace(/\n/g, '<br>');
+  return '<p>' + html + '</p>';
+}
+
 function renderChunks(chunks){
   const el = document.getElementById('chunks-container');
   document.getElementById('snippet-count').textContent = chunks.length;
@@ -635,7 +671,7 @@ function initGraph(){
   canvas.height = h * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  const N = 14;
+  const N = 16;
   nodes = Array.from({length:N}).map((_,i) => ({
     x: Math.random()*w, y: Math.random()*h,
     vx: (Math.random()-0.5)*0.15, vy: (Math.random()-0.5)*0.15,
