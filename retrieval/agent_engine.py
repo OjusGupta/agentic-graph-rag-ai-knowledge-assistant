@@ -7,11 +7,18 @@ from retrieval.retriever import query_store
 
 try:
     from sentence_transformers import CrossEncoder
-    _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    _reranker = None
     RERANKER_AVAILABLE = True
 except Exception:
     RERANKER_AVAILABLE = False
     print("[WARN] CrossEncoder not available — reranking step skipped.")
+
+def _get_reranker():
+    """Lazy-load reranker on first use."""
+    global _reranker
+    if RERANKER_AVAILABLE and _reranker is None:
+        _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    return _reranker
 
 _VAGUE_TRIGGERS = {
     "it", "its", "this", "these", "those", "they", "them",
@@ -24,9 +31,10 @@ _MODEL = "llama-3.3-70b-versatile"
 
 def _rerank(query: str, chunks: List[Dict], top_n: int = 3) -> List[Dict]:
     """Re-score retrieved chunks against the query using a cross-encoder."""
-    if not RERANKER_AVAILABLE or not chunks:
+    reranker = _get_reranker()
+    if not reranker or not chunks:
         return chunks[:top_n]
-    scores = _reranker.predict([(query, c["preview"]) for c in chunks])
+    scores = reranker.predict([(query, c["preview"]) for c in chunks])
     ranked = sorted(zip(scores, chunks), key=lambda x: x[0], reverse=True)
     return [c for _, c in ranked[:top_n]]
 

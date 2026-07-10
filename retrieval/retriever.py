@@ -8,10 +8,17 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 PERSIST_DIR = "./vector_db/chroma"
 
-embeddings = HuggingFaceEmbeddings(
-    model_name="BAAI/bge-base-en-v1.5",
-    encode_kwargs={"normalize_embeddings": True},
-)
+_embeddings = None
+
+def _get_embeddings():
+    """Lazy-load embeddings so the server starts fast and Render port scan succeeds."""
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(
+            model_name="BAAI/bge-base-en-v1.5",
+            encode_kwargs={"normalize_embeddings": True},
+        )
+    return _embeddings
 
 
 def _clean(text: str) -> str:
@@ -53,7 +60,7 @@ def build_vector_store(chunks: List[Any], persist_directory: Path) -> None:
 
     Chroma.from_documents(
         documents=valid_chunks,
-        embedding=embeddings,
+        embedding=_get_embeddings(),
         persist_directory=PERSIST_DIR,
     )
     print(f"[OK] Stored {len(valid_chunks)} chunks in Chroma.")
@@ -67,7 +74,7 @@ def query_store(query_text: str, chunk_count: int = 8, source_filter: str = None
         return output
 
     try:
-        db = Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings)
+        db = Chroma(persist_directory=PERSIST_DIR, embedding_function=_get_embeddings())
         search_filter = {"source": {"$eq": source_filter}} if source_filter else None
 
         results = db.similarity_search_with_relevance_scores(
