@@ -15,7 +15,7 @@ def _get_embeddings():
     global _embeddings
     if _embeddings is None:
         _embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-base-en-v1.5",
+            model_name="all-MiniLM-L6-v2",  # 🚀 Swapped to ultra-lightweight production model
             encode_kwargs={"normalize_embeddings": True},
         )
     return _embeddings
