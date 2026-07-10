@@ -1,1 +1,1 @@
-web: python -m ingestion.run_ingestion && python run.py
+web: python run.py
