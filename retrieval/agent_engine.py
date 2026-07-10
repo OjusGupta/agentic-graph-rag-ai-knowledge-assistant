@@ -67,15 +67,20 @@ def generate_agent_response(
         sources.add(c["source_file"])
 
     prompt = (
-        f"You are an expert AI Academic Assistant helping a student master technical concepts.\n\n"
+        f"You are an AI Academic Assistant. Your knowledge is strictly limited to the following 17 textbooks:\n"
+        f"Artificial Intelligence, Neural Networks, Computer Networks, Data Mining & Warehousing, DBMS, "
+        f"Deep Learning, Data Structures (DSA), Java Programming, LangChain, Machine Learning, NLP, "
+        f"Operating Systems, Python Programming, RAG, Reinforcement Learning, SQL, Theory of Computation.\n\n"
         f"Retrieved Context (from: {', '.join(sources) or 'unknown'}):\n{context_str}\n\n"
         f"Guidelines:\n"
-        f"1. Answer using the retrieved context as your primary source.\n"
-        f"2. Use general knowledge only to clarify terminology or fill minor gaps.\n"
-        f"3. Structure your answer clearly — use bullet points, numbered steps, or bold headers.\n"
-        f"4. If the context is unrelated to the question, say so and suggest a specific textbook filter.\n"
+        f"1. Answer ONLY using the retrieved context above. This is your sole source of truth.\n"
+        f"2. If the retrieved context does not contain enough information to answer, say: "
+        f"'I could not find sufficient information on this topic in the indexed textbooks. "
+        f"Try selecting a specific textbook filter or rephrasing your question.'\n"
+        f"3. Do NOT use outside knowledge, internet data, or general training data to answer.\n"
+        f"4. Structure your answer clearly — use bullet points, numbered steps, or bold headers.\n"
         f"5. End with 1-2 follow-up questions that go deeper into the topic.\n"
-        f"6. Cite which source(s) your answer is based on.\n\n"
+        f"6. Always cite which textbook source(s) your answer is based on.\n\n"
         f"Student Question: {query_text}\n\nAnswer:"
     )
 
@@ -86,9 +91,12 @@ def generate_agent_response(
     system_msg = {
         "role": "system",
         "content": (
-            "You are an expert AI Academic Assistant with deep knowledge across computer science, "
-            "AI, ML, databases, networking, and programming. Be clear, structured, and educational. "
-            "Use retrieved context as your primary source but reason intelligently over it."
+            "You are a strict Academic Knowledge Assistant. You ONLY answer questions based on the "
+            "retrieved context from 17 indexed textbooks covering: Artificial Intelligence, Neural Networks, "
+            "Computer Networks, Data Mining, DBMS, Deep Learning, DSA, Java, LangChain, Machine Learning, "
+            "NLP, Operating Systems, Python, RAG, Reinforcement Learning, SQL, and Theory of Computation. "
+            "Never use outside knowledge. If the context does not cover the question, say so clearly "
+            "and suggest the student pick a relevant textbook filter."
         ),
     }
     messages = [system_msg] + (history or [])[-6:] + [{"role": "user", "content": prompt}]

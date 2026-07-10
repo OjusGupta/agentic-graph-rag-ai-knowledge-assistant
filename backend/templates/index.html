@@ -345,7 +345,11 @@
           <div class="avatar ai"><i data-lucide="workflow" style="width:15px;height:15px;"></i></div>
           <div class="bubble system">
             <div class="msg-label ai">system orchestrator</div>
-            <div class="msg-text">Your library is indexed — 4,362 chunks across 17 documents, linked into a 16-node concept graph. Ask anything and I'll trace the answer across every book it touches.</div>
+            <div class="msg-text">I am an Academic Knowledge Assistant grounded exclusively in <strong>17 indexed textbooks</strong> covering AI, ML, Deep Learning, NLP, RAG, Reinforcement Learning, Neural Networks, LangChain, DBMS, SQL, DSA, Java, Python, Computer Networks, Operating Systems, Data Mining, and Theory of Computation.
+
+I will only answer from what is in these books — 4,362 indexed chunks linked into a 16-node concept graph. If your question is outside this corpus, I will tell you clearly.
+
+Select a textbook filter to narrow results, or ask freely across all 17 books.</div>
           </div>
         </div>
       </div>
@@ -353,7 +357,7 @@
       <div class="composer-wrap">
         <form id="query-form">
           <div class="composer">
-            <textarea id="query-input" rows="2" placeholder="Ask your corpus — e.g. how do SQL transactions relate to distributed consensus?" required></textarea>
+            <textarea id="query-input" rows="2" placeholder="Ask from the 17 textbooks — e.g. How does backpropagation work? What is normalization in DBMS?" required></textarea>
             <div class="composer-tools">
               <select id="source-filter-select" class="font-mono" style="background:var(--surface-2); color:var(--ink-dim); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:10.5px; padding:3px 6px; outline:none; cursor:pointer;">
                 <option value="">All Textbooks</option>
