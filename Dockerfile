@@ -16,4 +16,4 @@ COPY . .
 # HuggingFace Spaces runs on port 7860
 EXPOSE 7860
 
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD uvicorn backend.app:app --host 0.0.0.0 --port $PORT
