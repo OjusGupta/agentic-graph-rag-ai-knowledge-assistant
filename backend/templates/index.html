@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus &mdash; Graph RAG Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  /* ============ DESIGN TOKENS — GEMINI STYLE ============ */
+  :root{
+    --bg:#0d0f14;
+    --bg-2:#080a0f;
+    --surface:#13161e;
+    --surface-2:#1a1e28;
+    --surface-hover:#21263300;
+    --border:#1e2330;
+    --border-strong:#2a3045;
+    --ink:#e8eaf6;
+    --ink-dim:#8f96b3;
+    --ink-faint:#4a5070;
+    --accent:#8ab4f8;
+    --accent-strong:#669df6;
+    --accent-ink:#0d1117;
+    --accent-soft:rgba(138,180,248,.10);
+    --accent-soft-strong:rgba(138,180,248,.20);
+    --accent-2:#c58af9;
+    --accent-2-soft:rgba(197,138,249,.13);
+    --danger:#f28b82;
+    --danger-soft:rgba(242,139,130,.10);
+    --shadow-panel: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 32px -12px rgba(0,0,0,.7);
+    --shadow-raised: 0 1px 0 rgba(255,255,255,.05) inset, 0 20px 48px -16px rgba(0,0,0,.8);
+    --grain-opacity:.03;
+    --radius-lg:16px;
+    --radius-md:10px;
+    --radius-sm:7px;
+  }
+  html[data-theme="light"]{
+    --bg:#f8f9ff;
+    --bg-2:#f0f2fc;
+    --surface:#ffffff;
+    --surface-2:#e8eaf6;
+    --surface-hover:#dde1f9;
+    --border:#c5cae9;
+    --border-strong:#9fa8da;
+    --ink:#1a1c2e;
+    --ink-dim:#3c4070;
+    --ink-faint:#7986cb;
+    --accent:#1a73e8;
+    --accent-strong:#1557b0;
+    --accent-ink:#ffffff;
+    --accent-soft:rgba(26,115,232,.08);
+    --accent-soft-strong:rgba(26,115,232,.16);
+    --accent-2:#9334e6;
+    --accent-2-soft:rgba(147,52,230,.10);
+    --danger:#c5221f;
+    --danger-soft:rgba(197,34,31,.08);
+    --shadow-panel: 0 1px 0 rgba(255,255,255,.8) inset, 0 10px 28px -14px rgba(26,115,232,.12);
+    --shadow-raised: 0 1px 0 rgba(255,255,255,.9) inset, 0 24px 48px -20px rgba(26,26,60,.15);
+    --grain-opacity:.015;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+    transition:background .35s ease, color .35s ease;
+  }
+  .font-display{font-family:'Space Grotesk',sans-serif;}
+  .font-mono{font-family:'JetBrains Mono',monospace;}
+
+  /* ambient texture */
+  #atmosphere{
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -5%, rgba(138,180,248,.07), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 10%, rgba(197,138,249,.07), transparent 55%),
+      radial-gradient(ellipse 600px 400px at 50% 100%, rgba(102,157,246,.05), transparent 60%);
+    transition:opacity .35s ease;
+  }
+  #grain{
+    position:fixed; inset:0; pointer-events:none; z-index:1; opacity:var(--grain-opacity); mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  ::-webkit-scrollbar{width:9px; height:9px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:99px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--ink-faint);}
+
+  button{font-family:inherit;}
+  button:focus-visible, input:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+
+  /* ============ LAYOUT SHELL ============ */
+  #shell{position:relative; z-index:2; height:100%; display:flex; flex-direction:column;}
+
+  header{
+    height:56px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
+    padding:0 18px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter:blur(14px);
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand-mark{
+    width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(140deg, var(--accent), var(--accent-2));
+    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 6px 16px -6px var(--accent-soft-strong);
+  }
+  .brand-name{font-size:14px; font-weight:600; letter-spacing:.01em;}
+  .brand-sub{font-size:10.5px; color:var(--ink-faint); letter-spacing:.08em; text-transform:uppercase; font-family:'JetBrains Mono',monospace;}
+
+  .telemetry{display:flex; align-items:center; gap:8px;}
+  .chip{
+    display:flex; align-items:center; gap:6px; font-size:11px; padding:5px 10px; border-radius:99px;
+    border:1px solid var(--border); background:var(--surface-2); color:var(--ink-dim); font-family:'JetBrains Mono',monospace;
+  }
+  .dot{width:6px; height:6px; border-radius:99px; background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .dot.live{animation:pulse-dot 2s ease-in-out infinite;}
+  @keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  .icon-btn{
+    width:32px; height:32px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center;
+    color:var(--ink-dim); border:1px solid transparent; background:transparent; cursor:pointer; transition:.15s;
+  }
+  .icon-btn:hover{background:var(--surface-2); border-color:var(--border); color:var(--ink);}
+  .icon-btn svg{width:15px; height:15px;}
+
+  /* ============ SIDEBAR ============ */
+  .body-row{flex:1; display:flex; min-height:0;}
+  aside.left{
+    width:264px; flex-shrink:0; border-right:1px solid var(--border); background:var(--bg-2);
+    display:flex; flex-direction:column;
+  }
+  .new-session{
+    margin:12px; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 11px; border-radius:var(--radius-md); border:1px solid var(--border-strong);
+    background:linear-gradient(180deg, var(--surface-2), var(--surface));
+    box-shadow:var(--shadow-panel); color:var(--ink); font-size:12.5px; font-weight:500; cursor:pointer; transition:.15s;
+  }
+  .new-session:hover{border-color:var(--accent); box-shadow:var(--shadow-panel), 0 0 0 3px var(--accent-soft);}
+  kbd{font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 6px; border-radius:5px; background:var(--surface); border:1px solid var(--border); color:var(--ink-faint);}
+
+  .search-wrap{padding:0 12px 10px; position:relative;}
+  .search-wrap svg{position:absolute; left:22px; top:9px; width:14px; height:14px; color:var(--ink-faint); pointer-events:none;}
+  #chat-search{
+    width:100%; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:8px 10px 8px 30px; font-size:12.5px; color:var(--ink); transition:.15s;
+  }
+  #chat-search::placeholder{color:var(--ink-faint);}
+  #chat-search:focus{border-color:var(--accent); background:var(--surface-2);}
+
+  .section-label{
+    font-size:10px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint);
+    padding:6px 20px; font-family:'JetBrains Mono',monospace; display:flex; justify-content:space-between;
+  }
+  #chat-history-list{flex:1; overflow-y:auto; padding:0 10px; display:flex; flex-direction:column; gap:2px;}
+  .thread-btn{
+    width:100%; text-align:left; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid transparent;
+    background:transparent; color:var(--ink-dim); font-size:12px; display:flex; align-items:center; gap:8px;
+    cursor:pointer; transition:.12s;
+  }
+  .thread-btn:hover{background:var(--surface-hover); color:var(--ink);}
+  .thread-btn.active{background:var(--surface-2); border-color:var(--border); color:var(--ink);}
+  .thread-btn .t-icon{color:var(--accent); flex-shrink:0;}
+  .thread-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;}
+  .thread-btn time{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--ink-faint); flex-shrink:0;}
+  .no-results{padding:14px 10px; font-size:11.5px; color:var(--ink-faint); text-align:center; font-family:'JetBrains Mono',monospace;}
+
+  .corpus-panel{margin:10px; padding:12px; border-radius:var(--radius-md); border:1px solid var(--border); background:var(--surface); box-shadow:var(--shadow-panel);}
+  .corpus-row{display:flex; align-items:center; justify-content:space-between; font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--ink-dim); margin-bottom:7px;}
+  .corpus-row:last-child{margin-bottom:0;}
+  .corpus-row b{color:var(--ink); font-weight:600;}
+  .meter{height:4px; border-radius:99px; background:var(--surface-2); overflow:hidden; margin-top:4px;}
+  .meter i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg, var(--accent-strong), var(--accent));}
+
+  /* ============ CENTER CHAT ============ */
+  section.center{flex:1; display:flex; flex-direction:column; min-width:0; position:relative;}
+  #chat-window{flex:1; overflow-y:auto; padding:26px 24px 10px;}
+  .msg-row{max-width:760px; margin:0 auto 18px; display:flex; gap:12px;}
+  .avatar{
+    width:30px; height:30px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2); border:1px solid var(--border);
+  }
+  .avatar.ai{color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .bubble{border-radius:var(--radius-lg); padding:14px 16px; border:1px solid var(--border); box-shadow:var(--shadow-panel);}
+  .bubble.system{background:linear-gradient(180deg, var(--surface), var(--surface-2)); flex:1;}
+  .bubble.user{background:var(--accent-soft); border-color:var(--accent-soft-strong); margin-left:auto;}
+  .msg-row.user{justify-content:flex-end;}
+  .msg-label{font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-bottom:4px;}
+  .msg-label.ai{color:var(--accent);}
+  .msg-label.user{color:var(--ink-dim); text-align:right;}
+  .msg-text{font-size:13.5px; line-height:1.6; color:var(--ink); white-space:pre-line;}
+
+  .thinking{display:flex; align-items:center; gap:8px; max-width:760px; margin:0 auto 18px; font-size:11.5px; color:var(--ink-faint); font-family:'JetBrains Mono',monospace;}
+  .thinking .spin{width:13px; height:13px; color:var(--accent); animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .composer-wrap{padding:14px 24px 18px; border-top:1px solid var(--border); background:var(--bg-2);}
+  .composer{
+    max-width:760px; margin:0 auto; border-radius:var(--radius-lg); border:1px solid var(--border);
+    background:var(--surface); box-shadow:var(--shadow-raised); transition:.15s; position:relative;
+  }
+  .composer:focus-within{border-color:var(--accent); box-shadow:var(--shadow-raised), 0 0 0 3px var(--accent-soft);}
+  #query-input{
+    width:100%; background:transparent; border:none; resize:none; color:var(--ink); font-size:13.5px;
+    padding:14px 16px 44px; font-family:'Inter',sans-serif; line-height:1.5;
+  }
+  #query-input::placeholder{color:var(--ink-faint);}
+  #query-input:focus{outline:none;}
+  .composer-tools{position:absolute; bottom:9px; left:10px; display:flex; align-items:center; gap:6px;}
+  .kstep{display:flex; align-items:center; gap:5px; font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--ink-faint); border:1px solid var(--border); padding:3px 4px 3px 8px; border-radius:var(--radius-sm); background:var(--surface-2);}
+  .kstep button{width:16px; height:16px; border-radius:4px; border:none; background:transparent; color:var(--ink-dim); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  .kstep button:hover{background:var(--surface-hover); color:var(--ink);}
+  .submit-btn{
+    position:absolute; bottom:9px; right:9px; display:flex; align-items:center; gap:6px; border:none; cursor:pointer;
+    padding:7px 13px; border-radius:var(--radius-sm); font-size:12px; font-weight:600;
+    background:linear-gradient(140deg, var(--accent), var(--accent-strong)); color:var(--accent-ink);
+    transition:.15s; box-shadow:0 6px 16px -6px var(--accent-soft-strong);
+  }
+  .submit-btn:hover{filter:brightness(1.06); transform:translateY(-1px);}
+  .submit-btn:active{transform:translateY(0);}
+  .composer-hint{text-align:center; font-size:10.5px; color:var(--ink-faint); margin-top:9px; font-family:'JetBrains Mono',monospace;}
+
+  /* ============ RIGHT ANALYTICS ============ */
+  aside.right{width:320px; flex-shrink:0; border-left:1px solid var(--border); background:var(--bg-2); display:flex; flex-direction:column; overflow:hidden;}
+  .right-tab{padding:13px 16px; border-bottom:1px solid var(--border); font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); font-family:'JetBrains Mono',monospace; display:flex; align-items:center; gap:7px;}
+  .right-body{flex:1; overflow-y:auto; padding:16px;}
+  .panel-heading{display:flex; align-items:center; justify-content:between; gap:6px; margin-bottom:10px; color:var(--ink-dim);}
+  .panel-heading h2{font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; display:flex; align-items:center; gap:6px; flex:1;}
+  .panel-heading .count{font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--ink-faint);}
+
+  #graph-canvas-wrap{
+    border-radius:var(--radius-md); border:1px solid var(--border); background:radial-gradient(circle at 30% 20%, var(--surface-2), var(--bg));
+    box-shadow:var(--shadow-panel); overflow:hidden; position:relative; height:200px;
+  }
+  #graph-canvas{display:block; width:100%; height:100%;}
+  .graph-caption{display:flex; justify-content:space-between; font-size:9.5px; color:var(--ink-faint); font-family:'JetBrains Mono',monospace; padding:7px 2px 0;}
+
+  .empty-state{font-size:11px; color:var(--ink-faint); border:1px dashed var(--border); border-radius:var(--radius-md); padding:16px; text-align:center; font-family:'JetBrains Mono',monospace; background:color-mix(in srgb, var(--surface) 60%, transparent);}
+
+  .snippet-card{border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); padding:11px; margin-bottom:9px; box-shadow:var(--shadow-panel); transition:.15s;}
+  .snippet-card:hover{border-color:var(--border-strong);}
+  .snippet-head{display:flex; align-items:center; justify-content:space-between; font-size:10.5px; font-family:'JetBrains Mono',monospace; border-bottom:1px solid var(--border); padding-bottom:7px; margin-bottom:7px;}
+  .snippet-src{color:var(--accent-2); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px;}
+  .snippet-conf{color:var(--ink-faint); font-size:9px; letter-spacing:.05em;}
+  .snippet-preview{font-size:11.5px; line-height:1.55; color:var(--ink-dim); font-family:'Inter',sans-serif; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;}
+  .conf-meter{height:3px; border-radius:99px; background:var(--surface-2); margin-top:8px; overflow:hidden;}
+  .conf-meter i{display:block; height:100%; background:linear-gradient(90deg, var(--accent-2), var(--accent));}
+
+  .error-banner{display:flex; gap:10px; max-width:760px; margin:0 auto 18px; padding:12px 14px; border-radius:var(--radius-md); background:var(--danger-soft); border:1px solid rgba(239,100,97,.3); color:var(--danger); font-size:12px; font-family:'JetBrains Mono',monospace;}
+
+  @media (prefers-reduced-motion: reduce){
+    .dot.live{animation:none;} .thinking .spin{animation:none;}
+  }
+  @media (max-width: 900px){
+    aside.right{display:none;}
+  }
+  @media (max-width: 680px){
+    aside.left{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<div id="atmosphere"></div>
+<div id="grain"></div>
+
+<div id="shell">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="5" cy="6" r="2.3" fill="#0d1117"/>
+          <circle cx="19" cy="6" r="2.3" fill="#0d1117"/>
+          <circle cx="12" cy="18" r="2.3" fill="#0d1117"/>
+          <path d="M6.8 7.3 L11 16.3 M17.2 7.3 L13 16.3 M7.3 6 H16.7" stroke="#0d1117" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name font-display">Nexus <span style="color:var(--ink-faint); font-weight:500;">Console</span></div>
+        <div class="brand-sub">graph rag &middot; v1.3</div>
+      </div>
+    </div>
+
+    <div class="telemetry">
+      <div class="chip"><span class="dot live"></span> pipeline online</div>
+      <div class="chip" id="latency-chip">latency <b style="color:var(--ink); margin-left:3px;">38ms</b></div>
+      <div class="chip">nexus-embed-v2</div>
+      <button class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle color theme"></button>
+      <button class="icon-btn" title="Settings"><i data-lucide="settings-2"></i></button>
+    </div>
+  </header>
+
+  <div class="body-row">
+
+    <aside class="left">
+      <button class="new-session" onclick="createNewChat()">
+        <span style="display:flex; align-items:center; gap:8px;"><i data-lucide="plus" style="width:15px;height:15px;color:var(--ink-dim);"></i> New session</span>
+        <kbd>Ctrl N</kbd>
+      </button>
+
+      <div class="search-wrap">
+        <i data-lucide="search"></i>
+        <input id="chat-search" type="text" placeholder="Search chats..." oninput="filterThreads(this.value)">
+      </div>
+
+      <div class="section-label"><span>Threads</span><span id="thread-count">1</span></div>
+      <div id="chat-history-list">
+        <button class="thread-btn active" data-title="database & sql graph search">
+          <i data-lucide="message-square-code" class="t-icon" style="width:14px;height:14px;"></i>
+          <span>Database & SQL Graph Search</span>
+          <time>2m</time>
+        </button>
+      </div>
+
+      <div class="corpus-panel">
+        <div class="corpus-row"><span>Vector chunks</span><b>11,798</b></div>
+        <div class="meter"><i style="width:78%;"></i></div>
+        <div class="corpus-row" style="margin-top:9px;"><span>Graph nodes</span><b>412 / 17 docs</b></div>
+        <div class="meter"><i style="width:54%; background:linear-gradient(90deg, var(--accent-2), var(--accent-2));"></i></div>
+      </div>
+    </aside>
+
+    <section class="center">
+      <div id="chat-window">
+        <div class="msg-row">
+          <div class="avatar ai"><i data-lucide="workflow" style="width:15px;height:15px;"></i></div>
+          <div class="bubble system">
+            <div class="msg-label ai">system orchestrator</div>
+            <div class="msg-text">Your library is mapped into an active concept graph — 412 nodes across 17 documents. Ask a question and I'll trace the answer across every book it touches.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <form id="query-form">
+          <div class="composer">
+            <textarea id="query-input" rows="2" placeholder="Ask your corpus — e.g. how do SQL transactions relate to distributed consensus?" required></textarea>
+            <div class="composer-tools">
+              <select id="source-filter-select" class="font-mono" style="background:var(--surface-2); color:var(--ink-dim); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:10.5px; padding:3px 6px; outline:none; cursor:pointer;">
+                <option value="">📚 All Textbooks</option>
+                <option value="computer networks">🌐 Computer Networks</option>
+                <option value="java programming">☕ Java Programming</option>
+                <option value="os.pdf">🖥️ Operating Systems</option>
+                <option value="aws-general">☁️ AWS Reference</option>
+                <option value="artificial intelligence">🤖 Artificial Intelligence</option>
+              </select>
+
+              <div class="kstep">
+                <span>top-k</span>
+                <button type="button" onclick="stepK(-1)"><i data-lucide="minus" style="width:11px;height:11px;"></i></button>
+                <b id="k-value" style="color:var(--ink); min-width:10px; text-align:center;">5</b>
+                <button type="button" onclick="stepK(1)"><i data-lucide="plus" style="width:11px;height:11px;"></i></button>
+              </div>
+            </div>
+            <button type="submit" class="submit-btn">
+              Run query <i data-lucide="corner-down-left" style="width:12px;height:12px;"></i>
+            </button>
+          </div>
+        </form>
+        <p class="composer-hint">Sanitizes input &amp; resolves structural document matches before every trace.</p>
+      </div>
+    </section>
+
+    <aside class="right">
+      <div class="right-tab"><i data-lucide="activity" style="width:13px;height:13px;color:var(--accent);"></i> Engine analytics</div>
+      <div class="right-body">
+
+        <div class="panel-heading">
+          <h2><i data-lucide="git-branch" style="width:13px;height:13px;"></i> Graph topology</h2>
+          <span class="count" id="graph-count">0 edges lit</span>
+        </div>
+        <div id="graph-canvas-wrap">
+          <canvas id="graph-canvas"></canvas>
+        </div>
+        <div class="graph-caption"><span id="graph-nodes-label">14 nodes tracked</span><span id="graph-status">idle</span></div>
+
+        <div style="margin-top:20px;">
+          <div class="panel-heading">
+            <h2><i data-lucide="file-text" style="width:13px;height:13px;"></i> Retrieved snippets</h2>
+            <span class="count" id="snippet-count">0</span>
+          </div>
+          <div id="chunks-container">
+            <div class="empty-state">No matching chunks retrieved yet — run a query to populate this panel.</div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<script>
+lucide.createIcons();
+
+/* ============ THEME TOGGLE ============ */
+let currentTheme = 'dark';
+function sunIcon(){ return '<i data-lucide="sun" style="width:15px;height:15px;"></i>'; }
+function moonIcon(){ return '<i data-lucide="moon" style="width:15px;height:15px;"></i>'; }
+const themeBtn = document.getElementById('theme-toggle');
+function renderThemeIcon(){
+  themeBtn.innerHTML = currentTheme === 'dark' ? moonIcon() : sunIcon();
+  lucide.createIcons();
+}
+renderThemeIcon();
+themeBtn.addEventListener('click', () => {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  renderThemeIcon();
+  requestAnimationFrame(drawGraph);
+});
+
+/* ============ SIDEBAR SEARCH ============ */
+function filterThreads(q){
+  const list = document.getElementById('chat-history-list');
+  const items = Array.from(list.querySelectorAll('.thread-btn'));
+  const query = q.trim().toLowerCase();
+  let visible = 0;
+  items.forEach(btn => {
+    const match = btn.dataset.title.includes(query);
+    btn.style.display = match ? 'flex' : 'none';
+    if (match) visible++;
+  });
+  let empty = list.querySelector('.no-results');
+  if (visible === 0 && query.length){
+    if (!empty){
+      empty = document.createElement('div');
+      empty.className = 'no-results';
+      empty.textContent = 'No threads match "' + q + '"';
+      list.appendChild(empty);
+    } else {
+      empty.textContent = 'No threads match "' + q + '"';
+    }
+  } else if (empty){
+    empty.remove();
+  }
+}
+
+/* ============ CONVERSATION HISTORY ============ */
+let conversationHistory = [];
+
+/* ============ TOP-K STEPPER ============ */
+let kValue = 5;
+function stepK(delta){
+  kValue = Math.min(6, Math.max(1, kValue + delta));
+  document.getElementById('k-value').textContent = kValue;
+}
+
+/* ============ NEW SESSION ============ */
+function createNewChat(){
+  document.getElementById('chat-window').innerHTML = `
+    <div class="msg-row">
+      <div class="avatar ai"><i data-lucide="workflow" style="width:15px;height:15px;"></i></div>
+      <div class="bubble system">
+        <div class="msg-label ai">system orchestrator</div>
+        <div class="msg-text">New session active. Ask a question to start tracing the graph.</div>
+      </div>
+    </div>`;
+  conversationHistory = [];
+  document.getElementById('chunks-container').innerHTML = `<div class="empty-state">No matching chunks retrieved yet — run a query to populate this panel.</div>`;
+  resetGraphHighlights();
+  lucide.createIcons();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'n'){ e.preventDefault(); createNewChat(); }
+});
+
+/* ============ MOCK DEMO CONTENT (used only if no backend is reachable) ============ */
+const DEMO_SOURCES = ['Database Systems Fundamentals.pdf', 'Distributed Consensus Notes.md', 'Systems Design Primer.pdf', 'Query Optimization Handbook.pdf'];
+function buildDemoAnswer(q){
+  return `Based on the retrieved sections, "${q}" connects two ideas your corpus treats separately but that share the same underlying guarantee: isolation of concurrent state changes. The first document frames this at the storage layer, the second at the cluster-coordination layer — the graph links them through a shared "atomic commit" concept node.`;
+}
+function buildDemoChunks(){
+  const n = Math.min(4, kValue + 1);
+  return Array.from({length:n}).map((_,i) => ({
+    source_file: DEMO_SOURCES[i % DEMO_SOURCES.length],
+    preview: 'A synthesized excerpt describing how the system reaches agreement before committing a change, covering ordering guarantees, rollback boundaries, and the failure cases each protocol is designed to tolerate.',
+    confidence: Math.round(60 + Math.random()*35)
+  }));
+}
+
+/* ============ CHAT SUBMIT ============ */
+document.getElementById('query-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const inputField = document.getElementById('query-input');
+  const chatWindow = document.getElementById('chat-window');
+  const queryText = inputField.value.trim();
+  if (!queryText) return;
+
+  chatWindow.insertAdjacentHTML('beforeend', `
+    <div class="msg-row user">
+      <div class="bubble user">
+        <div class="msg-label user">you</div>
+        <div class="msg-text">${escapeHtml(queryText)}</div>
+      </div>
+    </div>`);
+  inputField.value = '';
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  const loaderId = 'loader-' + Date.now();
+  chatWindow.insertAdjacentHTML('beforeend', `
+    <div id="${loaderId}" class="thinking">
+      <i data-lucide="loader-2" class="spin"></i>
+      <span>Tracing concept graph &middot; computing chunk similarity...</span>
+    </div>`);
+  lucide.createIcons();
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+  document.getElementById('graph-status').textContent = 'tracing…';
+
+  // Extract selected domain filter values before parsing JSON strings
+  const filterElement = document.getElementById('source-filter-select');
+  const selectedFilter = filterElement ? filterElement.value : "";
+
+  let data;
+  try {
+    const response = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        query: queryText, 
+        k: kValue,
+        source_filter: selectedFilter,
+        history: conversationHistory.slice(-6)
+      })
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    data = await response.json();
+  } catch (err) {
+    document.getElementById(loaderId)?.remove();
+    document.getElementById('graph-status').textContent = 'error';
+    chatWindow.insertAdjacentHTML('beforeend', `
+      <div class="error-banner">
+        <i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0;"></i>
+        Backend unreachable: ${escapeHtml(err.message)}. Make sure python run.py is running.
+      </div>`);
+    lucide.createIcons();
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return;
+  }
+
+  document.getElementById(loaderId)?.remove();
+  document.getElementById('graph-status').textContent = 'resolved';
+
+  // Show error from backend clearly if present
+  if (data.error) {
+    chatWindow.insertAdjacentHTML('beforeend', `
+      <div class="error-banner">
+        <i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0;"></i>
+        ${escapeHtml(data.error)}
+      </div>`);
+    lucide.createIcons();
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return;
+  }
+
+  chatWindow.insertAdjacentHTML('beforeend', `
+    <div class="msg-row">
+      <div class="avatar ai"><i data-lucide="sparkles" style="width:15px;height:15px;"></i></div>
+      <div class="bubble system">
+        <div class="msg-label ai">agent synthesis</div>
+        <div class="msg-text">${escapeHtml(data.answer || '⚠️ No answer returned.')}</div>
+      </div>
+    </div>`);
+
+  // Store this turn in conversation history
+  conversationHistory.push({ role: 'user', content: queryText });
+  conversationHistory.push({ role: 'assistant', content: data.answer || '' });
+  if (conversationHistory.length > 12) conversationHistory = conversationHistory.slice(-12);
+
+  renderChunks(data.context_chunks || []);
+  pulseGraph((data.context_chunks || []).length || 2);
+
+  const historyList = document.getElementById('chat-history-list');
+  document.querySelectorAll('.thread-btn').forEach(b => b.classList.remove('active'));
+  if (historyList.querySelectorAll('.thread-btn').length < 8){
+    const short = queryText.length > 34 ? queryText.slice(0,34) + '…' : queryText;
+    historyList.insertAdjacentHTML('afterbegin', `
+      <button class="thread-btn active" data-title="${short.toLowerCase()}">
+        <i data-lucide="message-square" class="t-icon" style="width:14px;height:14px;"></i>
+        <span>${escapeHtml(short)}</span>
+        <time>now</time>
+      </button>`);
+    document.getElementById('thread-count').textContent = historyList.querySelectorAll('.thread-btn').length;
+  }
+
+  lucide.createIcons();
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+});
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function renderChunks(chunks){
+  const el = document.getElementById('chunks-container');
+  document.getElementById('snippet-count').textContent = chunks.length;
+  if (!chunks.length){
+    el.innerHTML = `<div class="empty-state">No matching chunks retrieved for this query.</div>`;
+    return;
+  }
+  el.innerHTML = chunks.map(c => `
+    <div class="snippet-card">
+      <div class="snippet-head">
+        <span class="snippet-src">${escapeHtml(c.source_file || 'unknown.pdf')}</span>
+        <span class="snippet-conf">${c.confidence || 70}% match</span>
+      </div>
+      <p class="snippet-preview">${escapeHtml(c.preview || '')}</p>
+      <div class="conf-meter"><i style="width:${c.confidence || 70}%;"></i></div>
+    </div>`).join('');
+}
+
+/* ============ SIGNATURE ELEMENT: LIVE GRAPH CANVAS ============ */
+const canvas = document.getElementById('graph-canvas');
+const ctx = canvas.getContext('2d');
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let nodes = [], edges = [], rafId = null;
+
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function initGraph(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * devicePixelRatio;
+  canvas.height = h * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const N = 14;
+  nodes = Array.from({length:N}).map((_,i) => ({
+    x: Math.random()*w, y: Math.random()*h,
+    vx: (Math.random()-0.5)*0.15, vy: (Math.random()-0.5)*0.15,
+    r: 2.6 + Math.random()*1.8,
+    lit: false
+  }));
+  edges = [];
+  nodes.forEach((n, i) => {
+    const links = 1 + Math.floor(Math.random()*2);
+    for (let j=0; j<links; j++){
+      const target = Math.floor(Math.random()*N);
+      if (target !== i) edges.push({ a:i, b:target, lit:false, litUntil:0 });
+    }
+  });
+}
+
+function drawGraph(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  ctx.clearRect(0,0,w,h);
+  const border = cssVar('--border');
+  const accent = cssVar('--accent');
+  const accent2 = cssVar('--accent-2');
+  const ink = cssVar('--ink-faint');
+  const now = performance.now();
+
+  edges.forEach(e => {
+    const a = nodes[e.a], b = nodes[e.b];
+    const lit = e.litUntil > now;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = lit ? accent2 : border;
+    ctx.lineWidth = lit ? 1.4 : 0.8;
+    ctx.globalAlpha = lit ? 0.9 : 0.55;
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+
+  nodes.forEach(n => {
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+    ctx.fillStyle = n.litUntil > now ? accent2 : accent;
+    ctx.shadowColor = n.litUntil > now ? accent2 : accent;
+    ctx.shadowBlur = n.litUntil > now ? 10 : 4;
+    ctx.globalAlpha = n.litUntil > now ? 1 : 0.75;
+    ctx.fill();
+  });
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+function stepGraph(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  nodes.forEach(n => {
+    n.x += n.vx; n.y += n.vy;
+    if (n.x < 8 || n.x > w-8) n.vx *= -1;
+    if (n.y < 8 || n.y > h-8) n.vy *= -1;
+  });
+  drawGraph();
+  if (!reducedMotion) rafId = requestAnimationFrame(stepGraph);
+}
+
+function pulseGraph(count){
+  const now = performance.now();
+  const shuffled = [...edges].sort(() => Math.random()-0.5).slice(0, Math.min(count+1, edges.length));
+  shuffled.forEach((e,i) => { e.litUntil = now + 2600 + i*300; });
+  document.getElementById('graph-count').textContent = shuffled.length + ' edges lit';
+  document.getElementById('graph-status').textContent = 'cross-referencing';
+  setTimeout(() => { document.getElementById('graph-status').textContent = 'idle'; }, 3200);
+  if (reducedMotion) drawGraph();
+}
+
+function resetGraphHighlights(){
+  edges.forEach(e => e.litUntil = 0);
+  document.getElementById('graph-count').textContent = '0 edges lit';
+  drawGraph();
+}
+
+window.addEventListener('resize', () => { initGraph(); drawGraph(); });
+initGraph();
+drawGraph();
+if (!reducedMotion) rafId = requestAnimationFrame(stepGraph);
+</script>
+</body>
+</html>

@@ -1,31 +1,24 @@
 from pathlib import Path
 from typing import List
 
-from langchain.document_loaders import PyPDFLoader
-from langchain.schema import Document
+from langchain_core.documents import Document
+from pypdf import PdfReader
 
 
-def list_pdf_paths(root_dir: Path) -> List[Path]:
-    return sorted(root_dir.rglob("*.pdf"))
-
-
-def load_documents(root_dir: Path) -> List[Document]:
-    root_dir = Path(root_dir)
-    documents: List[Document] = []
-
-    for pdf_path in list_pdf_paths(root_dir):
-        loader = PyPDFLoader(str(pdf_path))
-        pdf_docs = loader.load()
-        for doc in pdf_docs:
-            metadata = dict(doc.metadata)
-            metadata["source_file"] = str(pdf_path.relative_to(root_dir))
-            metadata["source_path"] = str(pdf_path)
-            documents.append(Document(page_content=doc.page_content, metadata=metadata))
-
+def load_documents(directory_path: Path) -> List[Document]:
+    """Recursively read all PDF files under directory_path into LangChain Documents."""
+    documents = []
+    for pdf_path in Path(directory_path).rglob("*.pdf"):
+        try:
+            print(f"[INFO] Reading: {pdf_path.name}")
+            reader = PdfReader(pdf_path)
+            for page_num, page in enumerate(reader.pages):
+                text = page.extract_text()
+                if text and text.strip():
+                    documents.append(Document(
+                        page_content=text,
+                        metadata={"source": pdf_path.name, "page": page_num + 1},
+                    ))
+        except Exception as e:
+            print(f"[WARN] Skipping damaged sections in {pdf_path.name}: {e}")
     return documents
-
-
-if __name__ == "__main__":
-    root = Path(__file__).resolve().parent.parent / "knowledge_base"
-    docs = load_documents(root)
-    print(f"Loaded {len(docs)} document chunks from {root}")

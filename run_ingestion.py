@@ -2,25 +2,35 @@ from pathlib import Path
 
 from ingestion.loader import load_documents
 from ingestion.splitter import split_documents
-from retrieval.vector_store import build_vector_store
+from retrieval.retriever import build_vector_store
+from retrieval.graph_manager import build_knowledge_graph
 
 
 def main() -> None:
-    repo_root = Path(__file__).resolve().parent
-    data_dir = repo_root / "knowledge_base"
-    persist_dir = repo_root / "vector_db"
+    kb_dir = Path("./knowledge_base")
+    persist_dir = Path("./vector_db")
 
-    print("Loading PDF documents from:", data_dir)
-    documents = load_documents(data_dir)
-    print(f"Loaded {len(documents)} documents from PDFs.")
+    print("[INFO] Step 1: Loading PDF documents ...")
+    documents = load_documents(kb_dir)
+    print(f"[INFO] Loaded {len(documents)} pages.")
 
-    print("Splitting documents into chunks...")
+    if not documents:
+        print("[ERROR] No documents found. Check knowledge_base/ folder.")
+        return
+
+    print("[INFO] Step 2: Splitting into chunks ...")
     chunks = split_documents(documents)
-    print(f"Created {len(chunks)} text chunks.")
+    print(f"[INFO] Created {len(chunks)} chunks.")
 
-    print("Building Chroma vector store...")
+    print("[INFO] Step 3: Building Chroma vector store ...")
     build_vector_store(chunks, persist_dir)
-    print("Vector store persisted to:", persist_dir)
+
+    print("[INFO] Step 4: Building knowledge graph ...")
+    graph = build_knowledge_graph()
+    if "error" in graph:
+        print(f"[WARN] Graph: {graph['error']}")
+
+    print("[OK] Ingestion complete.")
 
 
 if __name__ == "__main__":
