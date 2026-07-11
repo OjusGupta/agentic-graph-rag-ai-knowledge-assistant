@@ -136,23 +136,15 @@ from retrieval.retriever import query_store
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 _MODEL = "llama-3.3-70b-versatile"
 
-# Conversational phrases that can skip database retrieval entirely
-_GREETING_KEYWORDS = {"hello", "hi", "hey", "sup", "yo", "good morning", "good afternoon", "good evening"}
-
-def _is_pure_greeting(query: str) -> bool:
-    """Quick check to identify raw conversational greetings."""
-    cleaned = re.sub(r'[^\w\s]', '', query.lower().strip())
-    return cleaned in _GREETING_KEYWORDS
-
 
 def _optimize_and_clean_query(query_text: str, history: Optional[List[Dict]]) -> Dict[str, Any]:
     """
     Uses a fast pre-pass LLM instruction to fix typos, resolve follow-up 
-    ambiguities (like 'yes' or 'explain more'), and classify greeting intent.
+    ambiguities (like 'yes' or 'explain more'), and classify intent.
     """
     api_key = os.getenv("GROQ_API_KEY")
-    if not api_key or not history or _is_pure_greeting(query_text):
-        return {"is_greeting": _is_pure_greeting(query_text), "optimized_query": query_text}
+    if not api_key or not history:
+        return {"is_conversational": False, "optimized_query": query_text}
 
     # Format history context for the query cleanup pass
     history_str = ""
@@ -160,14 +152,14 @@ def _optimize_and_clean_query(query_text: str, history: Optional[List[Dict]]) ->
         history_str += f"{msg['role'].upper()}: {msg['content']}\n"
 
     system_prompt = (
-        "You are a text processing utility for a search engine. Analyze the user's latest query alongside the recent conversation history.\n"
+        "You are a text processing utility for an AI search assistant. Analyze the user's latest query alongside the recent conversation history.\n"
         "Tasks:\n"
         "1. Fix any spelling mistakes or typos in the user's query.\n"
-        "2. If the query is an implicit follow-up (e.g., 'yes', 'explain more', 'give code for that'), rewrite it into a complete, standalone search query containing all necessary context from history.\n"
-        "3. Detect if the query is a simple greeting or casual chit-chat.\n\n"
+        "2. If the query is an implicit follow-up (e.g., 'yes', 'explain more', 'give code for that'), rewrite it into a complete, standalone query containing all necessary context from history.\n"
+        "3. Detect if the query is pure casual chit-chat, a greeting, praise, or gratitude (e.g., 'hello', 'thanks', 'you are great') instead of an academic question.\n\n"
         "Output your assessment strictly in the following JSON format without code blocks or extra commentary:\n"
         "{\n"
-        '  "is_greeting": false,\n'
+        '  "is_conversational": true|false,\n'
         '  "optimized_query": "The fully corrected, standalone query text"\n'
         "}"
     )
@@ -189,15 +181,15 @@ def _optimize_and_clean_query(query_text: str, history: Optional[List[Dict]]) ->
         )
         res_data = response.json()
         content = res_data["choices"][0]["message"]["content"].strip()
-        # Safe extraction if JSON wrapping text is outputted
+        
         import json
         clean_json = re.search(r'\{.*\}', content, re.DOTALL)
         if clean_json:
             return json.loads(clean_json.group(0))
     except Exception:
-        pass # Fallback smoothly to standard parameters on extraction timeout or failure
+        pass 
 
-    return {"is_greeting": False, "optimized_query": query_text}
+    return {"is_conversational": False, "optimized_query": query_text}
 
 
 def generate_agent_response(
@@ -206,55 +198,47 @@ def generate_agent_response(
     source_filter: str = None,
     history: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
-    """Retrieve, filter, and synthesize grounded academic responses with auto-contextualization."""
+    """Retrieve, filter, and dynamically generate grounded academic or conversational responses."""
     history = history or []
 
-    # Step 1: Run pre-pass to check intent, fix typos, and resolve dialogue context
+    # Step 1: Run pre-pass to fix typos, handle dialogue context, and check conversational intent
     analysis = _optimize_and_clean_query(query_text, history)
-    
-    # Check if this is a casual greeting step
-    if analysis.get("is_greeting"):
-        return {
-            "answer": "Hi there! What are you about to study today!!",
-            "context_chunks": [],
-            "graph_cross_references": []
-        }
-
+    is_conversational = analysis.get("is_conversational", False)
     search_query = analysis.get("optimized_query", query_text)
 
-    # Step 2: Expanded Retrieval to gather deep code blocks (increased default bounds)
-    retrieval_data = query_store(search_query, chunk_count=max(chunk_count, 15), source_filter=source_filter)
-
-    if not retrieval_data.get("success"):
-        return {
-            "answer": "I could not find sufficient information on this topic in the indexed textbooks. Try selecting a specific textbook filter or rephrasing your question.",
-            "context_chunks": [],
-            "graph_cross_references": []
-        }
-
-    chunks = retrieval_data.get("context_chunks", [])
-    graph_refs = retrieval_data.get("graph_cross_references", [])
-
-    # Step 3: Format the context safely without leaving ugly raw markers
+    chunks = []
+    graph_refs = []
     context_str = ""
     sources = set()
-    for c in chunks:
-        context_str += f"\n[Textbook Source: {c['source_file']}]\n{c['preview']}\n"
-        sources.add(c["source_file"])
 
+    # Step 2: Only perform database retrieval if the query is an actual academic question
+    if not is_conversational:
+        retrieval_data = query_store(search_query, chunk_count=max(chunk_count, 15), source_filter=source_filter)
+        if retrieval_data.get("success"):
+            chunks = retrieval_data.get("context_chunks", [])
+            graph_refs = retrieval_data.get("graph_cross_references", [])
+            for c in chunks:
+                context_str += f"\n[Textbook Source: {c['source_file']}]\n{c['preview']}\n"
+                sources.add(c["source_file"])
+
+    # Step 3: Build a highly adaptive system prompt
     system_prompt = (
-        "You are a strict AI Academic Assistant matching context across 17 technical textbooks.\n\n"
-        "CRITICAL INSTRUCTIONS FOR UI CLEANLINESS:\n"
-        "- NEVER use terms like 'Chunk X', 'Source file:', or file suffixes like '.pdf' directly within your conversation text block. It looks ugly in our UI application.\n"
-        "- Do not say 'Based on Chunk 1...' or 'According to the text...'. Speak naturally.\n"
-        "- Integrate code fragments completely. If the user asks for a comprehensive programming topic (like Java Collections), synthesize all code implementation patterns available in the text blocks. Do not stop at just one example.\n"
-        "- End your response with 1-2 constructive academic follow-up questions."
+        "You are an intelligent, realistic AI Academic Mentor matching context across 17 technical textbooks.\n\n"
+        "DYNAMIC HANDLING RULES:\n"
+        "1. IF the user is greeting you, thanking you, or offering compliments/feedback (e.g., 'thanks', 'you are doing great'), "
+        "respond naturally, dynamically, and warmly as an encouraging mentor. DO NOT mention textbooks, chunks, or missing data in this conversational mode.\n"
+        "2. IF the user is asking an academic or technical question, strictly ground your answers using the context provided below. "
+        "If no context blocks are available for a technical topic, politely state that you couldn't find sufficient information in the 17 indexed textbooks.\n\n"
+        "UI CLEANLINESS RULES:\n"
+        "- NEVER use terms like 'Chunk X', 'Source file:', or file extensions like '.pdf' within your written dialogue.\n"
+        "- Synthesize robust code implementations naturally if requested, integrating complete documentation patterns.\n"
+        "- If answering an academic question, close with 1-2 sharp, contextual follow-up questions to push learning further."
     )
 
     prompt = (
-        f"Context Blocks:\n{context_str}\n\n"
-        f"Student Question: {search_query}\n\n"
-        f"Answer clearly using markdown. Mention the relevant book title naturally if needed, but do not show raw chunk indexes or bracketed file names:"
+        f"Context Blocks:\n{context_str or 'No textbook context retrieved (Conversational Mode Enabled)'}\n\n"
+        f"Student Input: {search_query}\n\n"
+        f"Response:"
     )
 
     api_key = os.getenv("GROQ_API_KEY")
@@ -271,7 +255,7 @@ def generate_agent_response(
         response = requests.post(
             _GROQ_URL,
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key.strip()}"},
-            json={"model": _MODEL, "messages": messages, "temperature": 0.2, "max_tokens": 1500},
+            json={"model": _MODEL, "messages": messages, "temperature": 0.3, "max_tokens": 1500},
             timeout=30,
         )
         data = response.json()
