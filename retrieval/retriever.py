@@ -11,49 +11,48 @@ PERSIST_DIR = "./vector_db/chroma"
 _embeddings = None
 
 def _get_embeddings():
-    """Lazy-load embeddings so the server starts fast and Render port scan succeeds."""
+    """Lazy-load embeddings so the server starts fast and cloud port validation passes cleanly."""
     global _embeddings
     if _embeddings is None:
         _embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-base-en-v1.5",
+            model_name="all-MiniLM-L6-v2",  # 🚀 Swapped to ultra-lightweight production model
             encode_kwargs={"normalize_embeddings": True},
         )
     return _embeddings
 
 
 def _clean(text: str) -> str:
-    """Strip surrogate characters that crash JSON serialization and Chroma."""
+    """Strip surrogate characters that crash JSON serialization and Chroma storage blocks."""
     return text.encode("utf-8", errors="ignore").decode("utf-8")
 
 
 def build_vector_store(chunks: List[Any], persist_directory: Path) -> None:
-    """Ingest document chunks into Chroma and write flat_index.json for the graph builder."""
-    print(f"[INFO] Building vector store at {PERSIST_DIR} ...")
+    """Ingests LangChain Document chunks into a semantic Chroma vector store with bulletproof string validation."""
+    print(f"📦 Initializing Chroma vector space at {PERSIST_DIR}...")
 
     valid_chunks = []
     for doc in chunks:
-        if not (doc and hasattr(doc, "page_content")):
-            continue
-        content = doc.page_content
-        if not isinstance(content, str):
-            content = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
-        content = _clean(content)
-        if content.strip():
-            doc.page_content = content
-            valid_chunks.append(doc)
+        if doc and hasattr(doc, "page_content"):
+            content = doc.page_content
+            if not isinstance(content, str):
+                content = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
+            content = _clean(content)
+            if content.strip():
+                doc.page_content = content
+                valid_chunks.append(doc)
 
     skipped = len(chunks) - len(valid_chunks)
     if skipped:
-        print(f"[WARN] Skipped {skipped} empty or malformed chunks.")
+        print(f"[WARN] Skipped {skipped} empty or malformed text blocks.")
 
     if not valid_chunks:
-        print("[WARN] No valid chunks to index. Aborting.")
+        print("[WARN] No valid chunks to index. Aborting store compilation.")
         return
 
-    # Write flat index so graph_manager can scan concepts without loading Chroma
+    # Write flat index configuration maps so graph managers can read concept matches smoothly
     out_dir = Path("./vector_db")
     out_dir.mkdir(parents=True, exist_ok=True)
-    flat_index = [{"page_content": _clean(d.page_content), "metadata": d.metadata} for d in valid_chunks]
+    flat_index = [{"page_content": d.page_content, "metadata": d.metadata} for d in valid_chunks]
     with open(out_dir / "flat_index.json", "w", encoding="utf-8") as f:
         json.dump(flat_index, f, ensure_ascii=False)
     print(f"[INFO] flat_index.json written — {len(flat_index)} chunks.")
@@ -63,11 +62,11 @@ def build_vector_store(chunks: List[Any], persist_directory: Path) -> None:
         embedding=_get_embeddings(),
         persist_directory=PERSIST_DIR,
     )
-    print(f"[OK] Stored {len(valid_chunks)} chunks in Chroma.")
+    print(f"[OK] Stored {len(valid_chunks)} chunks semantically inside ChromaDB storage layers.")
 
 
 def query_store(query_text: str, chunk_count: int = 8, source_filter: str = None) -> Dict[str, Any]:
-    """Hybrid vector + BM25 keyword search. Returns ranked context chunks and graph cross-references."""
+    """Hybrid vector semantic search matching intent context. Returns ranked chunks and graph references."""
     output = {"query": query_text, "success": False, "context_chunks": [], "graph_cross_references": []}
 
     if not os.path.exists(PERSIST_DIR):

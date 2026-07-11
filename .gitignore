@@ -4,6 +4,3 @@ __pycache__/
 .env
 .DS_Store
 node_modules/
-
-# Generated vector store and index artifacts
-vector_db/

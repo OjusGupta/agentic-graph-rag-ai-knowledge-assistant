@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en" class="h-full" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -758,6 +758,755 @@ window.addEventListener('resize', () => { initGraph(); drawGraph(); });
 initGraph();
 drawGraph();
 if (!reducedMotion) rafId = requestAnimationFrame(stepGraph);
+</script>
+</body>
+</html> -->
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus — Graph RAG Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  /* ============================================================
+     "COMMAND DECK" — same Reactor palette (black/white/grey +
+     one hot red), completely different structure: fixed split-
+     screen deck on the left instead of a top header + 3 panes.
+     ============================================================ */
+  :root{
+    --bg:#000000;
+    --bg-2:#050203;
+    --surface:#0d0a0b;
+    --surface-2:#161213;
+    --surface-hover:#1f1a1c;
+    --border:#2c1418;
+    --border-strong:#4a1e24;
+    --ink:#ffffff;
+    --ink-dim:#b7b0b2;
+    --ink-faint:#5c5457;
+    --accent:#ff0a3f;
+    --accent-strong:#ff2d55;
+    --accent-hot:#ff5470;
+    --accent-deep:#7a0018;
+    --accent-soft:rgba(255,10,63,.13);
+    --accent-soft-strong:rgba(255,10,63,.30);
+    --code-bg:#000000;
+    --shadow-panel: 0 1px 0 rgba(255,255,255,.03) inset, 0 14px 34px -14px rgba(0,0,0,.9);
+    --shadow-raised: 0 1px 0 rgba(255,255,255,.05) inset, 0 22px 50px -18px rgba(0,0,0,.9);
+    --cut:12px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .font-display{font-family:'Orbitron',sans-serif;}
+  .font-mono{font-family:'JetBrains Mono',monospace;}
+
+  #grain{
+    position:fixed; inset:0; pointer-events:none; z-index:5; opacity:.045; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  #scanlines{
+    position:fixed; inset:0; z-index:5; pointer-events:none; opacity:.4;
+    background:repeating-linear-gradient(to bottom, rgba(255,255,255,.018) 0px, rgba(255,255,255,.018) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode:overlay;
+  }
+  #trace-bar{ position:fixed; top:0; left:0; height:3px; width:100%; z-index:60; pointer-events:none; opacity:0; }
+  #trace-bar .fill{
+    position:absolute; top:0; left:0; height:100%; width:26%;
+    background:linear-gradient(90deg, transparent, #fff 15%, var(--accent) 55%, transparent);
+    box-shadow:0 0 18px 2px var(--accent), 0 0 6px 1px #fff;
+    animation:trace-sweep 1s ease-in-out infinite;
+  }
+  #trace-bar.active{opacity:1;}
+  @keyframes trace-sweep{ 0%{left:-26%;} 100%{left:100%;} }
+
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:99px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent-deep);}
+  button{font-family:inherit;}
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .cut{clip-path:polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);}
+
+  /* ============ SHELL: SPLIT SCREEN, NO TOP HEADER ============ */
+  #shell{position:relative; z-index:2; height:100%; display:flex;}
+
+  /* ---------- LEFT: COMMAND DECK ---------- */
+  #deck{
+    width:380px; flex-shrink:0; height:100%; display:flex; flex-direction:column;
+    background:linear-gradient(180deg, var(--bg-2), #000 70%);
+    border-right:1px solid var(--border-strong);
+    position:relative;
+  }
+  #deck::after{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(ellipse 380px 320px at 50% 28%, rgba(255,10,63,.10), transparent 65%);
+  }
+  .deck-brand{padding:22px 22px 14px; display:flex; align-items:center; gap:11px; position:relative; z-index:1;}
+  .brand-mark{
+    width:34px; height:34px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    background:linear-gradient(140deg, var(--accent), var(--accent-deep));
+    clip-path:polygon(20% 0, 100% 0, 100% 80%, 80% 100%, 0 100%, 0 20%);
+    box-shadow:0 0 0 1px rgba(255,255,255,.1) inset, 0 0 24px -4px var(--accent);
+  }
+  .brand-name{font-size:15px; font-weight:700; letter-spacing:.04em; font-family:'Orbitron',sans-serif; text-transform:uppercase; position:relative;}
+  .brand-name .glitch-layer{position:absolute; inset:0; overflow:hidden; opacity:0; color:var(--accent-hot);}
+  .brand-name.glitching .glitch-layer{animation:glitch-burst .32s steps(2,end) 2;}
+  @keyframes glitch-burst{
+    0%{ opacity:.9; clip-path:inset(10% 0 60% 0); transform:translate(-2px,1px);}
+    50%{ opacity:.7; clip-path:inset(50% 0 15% 0); transform:translate(2px,-1px);}
+    100%{ opacity:0; clip-path:inset(0 0 0 0); transform:translate(0,0);}
+  }
+  .brand-sub{font-size:9.5px; color:var(--ink-faint); letter-spacing:.14em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-top:2px;}
+
+  /* radar sweep — the signature visual for this layout */
+  #radar-wrap{ position:relative; z-index:1; margin:6px auto 4px; width:280px; height:280px; }
+  #radar-canvas{ width:100%; height:100%; display:block; }
+  .radar-caption{
+    display:flex; justify-content:space-between; font-size:9.5px; color:var(--ink-faint); font-family:'JetBrains Mono',monospace;
+    padding:0 24px; position:relative; z-index:1;
+  }
+  .radar-caption b{color:var(--accent-hot);}
+
+  .deck-stats{ padding:16px 22px; display:flex; flex-direction:column; gap:10px; position:relative; z-index:1; }
+  .stat-row{display:flex; align-items:center; justify-content:space-between; font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--ink-dim);}
+  .stat-row b{color:#fff; font-weight:700;}
+  .meter{height:3px; background:var(--surface-2); overflow:hidden; margin-top:5px;}
+  .meter i{display:block; height:100%; background:linear-gradient(90deg, var(--accent-deep), var(--accent), #fff); box-shadow:0 0 8px var(--accent-soft-strong);}
+
+  .deck-divider{height:1px; background:var(--border-strong); margin:4px 22px 12px; position:relative; z-index:1;}
+
+  .new-session{
+    margin:0 16px 10px; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 12px; border:1px solid var(--border-strong);
+    background:linear-gradient(180deg, var(--surface-2), var(--surface));
+    box-shadow:var(--shadow-panel); color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; transition:.15s;
+    clip-path:polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px); position:relative; z-index:1;
+  }
+  .new-session:hover{border-color:var(--accent); box-shadow:var(--shadow-panel), 0 0 20px -6px var(--accent-soft-strong);}
+  kbd{font-family:'JetBrains Mono',monospace; font-size:9.5px; padding:2px 5px; background:var(--surface); border:1px solid var(--border-strong); color:var(--ink-faint);}
+
+  .search-wrap{padding:0 16px 8px; position:relative; z-index:1;}
+  .search-wrap svg{position:absolute; left:26px; top:9px; width:13px; height:13px; color:var(--ink-faint); pointer-events:none;}
+  #chat-search{
+    width:100%; background:var(--surface); border:1px solid var(--border-strong);
+    padding:7px 10px 7px 28px; font-size:12px; color:var(--ink); transition:.15s;
+  }
+  #chat-search::placeholder{color:var(--ink-faint);}
+  #chat-search:focus{border-color:var(--accent); background:var(--surface-2);}
+
+  .section-label{
+    font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint);
+    padding:4px 22px; font-family:'JetBrains Mono',monospace; display:flex; justify-content:space-between; position:relative; z-index:1;
+  }
+  #chat-history-list{flex:1; min-height:40px; overflow-y:auto; padding:0 12px 12px; display:flex; flex-direction:column; gap:2px; position:relative; z-index:1;}
+  .thread-btn{
+    width:100%; text-align:left; padding:7px 10px; border:1px solid transparent;
+    background:transparent; color:var(--ink-dim); font-size:11.5px; display:flex; align-items:center; gap:7px;
+    cursor:pointer; transition:.12s;
+  }
+  .thread-btn:hover{background:var(--surface-hover); color:var(--ink);}
+  .thread-btn.active{background:var(--surface-2); border-color:var(--border-strong); color:var(--ink); box-shadow:inset 3px 0 0 var(--accent);}
+  .thread-btn .t-icon{color:var(--accent); flex-shrink:0;}
+  .thread-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;}
+  .thread-btn time{font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--ink-faint); flex-shrink:0;}
+  .no-results{padding:12px 10px; font-size:11px; color:var(--ink-faint); text-align:center; font-family:'JetBrains Mono',monospace;}
+
+  /* ---------- RIGHT: SINGLE-COLUMN CHAT ---------- */
+  #main{flex:1; min-width:0; display:flex; flex-direction:column; height:100%;}
+  #topstrip{
+    height:48px; flex-shrink:0; display:flex; align-items:center; justify-content:flex-end; gap:8px;
+    padding:0 22px; border-bottom:1px solid var(--border-strong); background:rgba(5,2,3,.7); backdrop-filter:blur(10px);
+  }
+  .chip{
+    display:flex; align-items:center; gap:6px; font-size:10.5px; padding:4px 10px;
+    border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink-dim); font-family:'JetBrains Mono',monospace;
+    clip-path:polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+  }
+  .dot{width:6px; height:6px; border-radius:99px; background:var(--accent); box-shadow:0 0 8px 2px var(--accent-soft-strong);}
+  .dot.live{animation:pulse-dot 1.6s ease-in-out infinite;}
+  @keyframes pulse-dot{0%,100%{opacity:1;} 50%{opacity:.4;}}
+  .icon-btn{
+    width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink-dim); border:1px solid transparent; background:transparent; cursor:pointer; transition:.15s;
+  }
+  .icon-btn:hover{background:var(--surface-2); border-color:var(--border-strong); color:var(--accent-hot);}
+  .icon-btn svg{width:14px; height:14px;}
+
+  #chat-window{flex:1; overflow-y:auto; padding:28px 24px 12px;}
+  .msg-row{max-width:700px; margin:0 auto 18px; display:flex; gap:12px;}
+  .avatar{
+    width:29px; height:29px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2); border:1px solid var(--border-strong);
+    clip-path:polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+  }
+  .avatar.ai{color:var(--accent-hot); box-shadow:0 0 0 3px var(--accent-soft);}
+  .bubble{padding:14px 17px; border:1px solid var(--border-strong); box-shadow:var(--shadow-panel);}
+  .bubble.system{background:linear-gradient(160deg, var(--surface), var(--surface-2)); flex:1; clip-path:polygon(0 0, 100% 0, 100% 100%, 14px 100%, 0 calc(100% - 14px));}
+  .bubble.user{background:linear-gradient(150deg, var(--accent-strong), var(--accent-deep)); border-color:var(--accent-deep); margin-left:auto; box-shadow:var(--shadow-panel), 0 0 26px -10px var(--accent-soft-strong); clip-path:polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);}
+  .msg-row.user{justify-content:flex-end;}
+  .msg-label{font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; font-family:'JetBrains Mono',monospace; margin-bottom:4px;}
+  .msg-label.ai{color:var(--accent-hot);}
+  .msg-label.user{color:rgba(255,255,255,.8); text-align:right;}
+  .msg-text{font-size:13.5px; line-height:1.65; color:var(--ink);}
+  .bubble.user .msg-text{color:#fff;}
+  .msg-text p{margin:0 0 8px;} .msg-text p:last-child{margin-bottom:0;}
+  .msg-text ul,.msg-text ol{margin:4px 0 8px; padding-left:20px;} .msg-text li{margin-bottom:3px;}
+  .msg-text strong{color:#fff; font-weight:700;}
+  .msg-text code{font-family:'JetBrains Mono',monospace; font-size:12px; background:var(--surface-2); border:1px solid var(--border-strong); border-radius:3px; padding:1px 5px; color:var(--accent-hot);}
+  .msg-text pre{position:relative; background:var(--code-bg); border:1px solid var(--border-strong); border-left:3px solid var(--accent); padding:15px 12px 10px; overflow-x:auto; margin:8px 0;}
+  .msg-text pre code{background:none; border:none; padding:0; font-size:12px; color:#f0eeec;}
+  .copy-btn{
+    position:absolute; top:6px; right:6px; display:flex; align-items:center; gap:4px;
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--ink-faint); background:rgba(255,255,255,.03); border:1px solid var(--border-strong);
+    padding:3px 7px; cursor:pointer; transition:.15s;
+  }
+  .copy-btn:hover{color:var(--accent-hot); border-color:var(--accent-soft-strong); background:var(--accent-soft);}
+  .copy-btn svg{width:10px; height:10px;}
+  .msg-text h1,.msg-text h2,.msg-text h3{font-family:'Orbitron',sans-serif; font-weight:700; margin:10px 0 4px; color:#fff; text-transform:uppercase; letter-spacing:.03em;}
+  .msg-text h1{font-size:14.5px;} .msg-text h2{font-size:13.5px;} .msg-text h3{font-size:12.5px;}
+
+  /* inline sources — replaces the old separate right-hand analytics panel */
+  .sources-toggle{
+    display:flex; align-items:center; gap:6px; margin-top:11px; padding-top:10px; border-top:1px dashed var(--border-strong);
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--ink-faint); cursor:pointer; user-select:none; width:fit-content;
+  }
+  .sources-toggle:hover{color:var(--accent-hot);}
+  .sources-toggle svg{width:12px; height:12px; transition:transform .2s;}
+  .sources-toggle.open svg.chevron{transform:rotate(90deg);}
+  .sources-panel{display:none; margin-top:10px; gap:9px; flex-direction:column;}
+  .sources-panel.open{display:flex;}
+  .snippet-card{border:1px solid var(--border-strong); background:rgba(255,255,255,.02); padding:10px; clip-path:polygon(7px 0, 100% 0, 100% 100%, 0 100%, 0 7px);}
+  .snippet-head{display:flex; align-items:center; justify-content:space-between; font-size:10px; font-family:'JetBrains Mono',monospace; border-bottom:1px solid var(--border-strong); padding-bottom:6px; margin-bottom:6px;}
+  .snippet-src{color:var(--accent-hot); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px;}
+  .snippet-conf{color:var(--ink-faint); font-size:9px;}
+  .snippet-preview{font-size:11px; line-height:1.55; color:var(--ink-dim); font-family:'Inter',sans-serif;}
+  .conf-meter{height:2.5px; background:var(--surface-2); margin-top:7px; overflow:hidden;}
+  .conf-meter i{display:block; height:100%; background:linear-gradient(90deg, var(--accent), #fff);}
+
+  .thinking{display:flex; align-items:center; gap:8px; max-width:700px; margin:0 auto 18px; font-size:11.5px; color:var(--ink-faint); font-family:'JetBrains Mono',monospace;}
+  .thinking .spin{width:13px; height:13px; color:var(--accent); animation:spin 1s linear infinite; filter:drop-shadow(0 0 4px var(--accent));}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .error-banner{display:flex; gap:10px; max-width:700px; margin:0 auto 18px; padding:12px 14px; background:var(--accent-soft); border:1px solid var(--accent-soft-strong); color:var(--accent-hot); font-size:12px; font-family:'JetBrains Mono',monospace;}
+
+  #composer-wrap{padding:14px 24px 18px; border-top:1px solid var(--border-strong); background:linear-gradient(0deg, rgba(5,2,3,.95), rgba(5,2,3,.7)); backdrop-filter:blur(16px);}
+  .composer{
+    max-width:700px; margin:0 auto; border:1px solid var(--border-strong);
+    background:rgba(13,10,11,.85); backdrop-filter:blur(10px);
+    box-shadow:var(--shadow-raised); transition:.15s; position:relative;
+    clip-path:polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  }
+  .composer:focus-within{border-color:var(--accent); box-shadow:var(--shadow-raised), 0 0 0 1px var(--accent), 0 0 30px -8px var(--accent-soft-strong);}
+  #query-input{ width:100%; background:transparent; border:none; resize:none; color:var(--ink); font-size:13.5px; padding:15px 17px 46px; font-family:'Inter',sans-serif; line-height:1.5; }
+  #query-input::placeholder{color:var(--ink-faint);}
+  #query-input:focus{outline:none;}
+  .composer-tools{position:absolute; bottom:10px; left:11px; display:flex; align-items:center; gap:6px;}
+  select.font-mono{background:var(--surface-2); color:var(--ink-dim); border:1px solid var(--border-strong); font-size:10.5px; padding:3px 6px; outline:none; cursor:pointer;}
+  .kstep{display:flex; align-items:center; gap:5px; font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--ink-faint); border:1px solid var(--border-strong); padding:3px 4px 3px 8px; background:var(--surface-2);}
+  .kstep button{width:16px; height:16px; border:none; background:transparent; color:var(--ink-dim); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  .kstep button:hover{background:var(--surface-hover); color:var(--accent-hot);}
+  .submit-btn{
+    position:absolute; bottom:10px; right:10px; display:flex; align-items:center; gap:6px; border:none; cursor:pointer;
+    padding:8px 15px; font-size:12px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+    background:linear-gradient(140deg, var(--accent-strong), var(--accent-deep)); color:#fff;
+    transition:.15s; box-shadow:0 0 20px -6px var(--accent-soft-strong);
+    clip-path:polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px); font-family:'JetBrains Mono',monospace;
+  }
+  .submit-btn:hover{filter:brightness(1.15); transform:translateY(-1px); box-shadow:0 0 30px -4px var(--accent), 0 0 0 1px var(--accent);}
+  .composer-hint{text-align:center; font-size:10.5px; color:var(--ink-faint); margin-top:9px; font-family:'JetBrains Mono',monospace;}
+
+  @media (prefers-reduced-motion: reduce){
+    .dot.live{animation:none;} .thinking .spin{animation:none;} #trace-bar .fill{animation:none; left:0; width:100%;} .brand-name.glitching .glitch-layer{animation:none;}
+  }
+  @media (max-width: 860px){ #deck{width:280px;} #radar-wrap{width:200px; height:200px;} }
+  @media (max-width: 640px){ #deck{display:none;} }
+</style>
+</head>
+<body>
+
+<div id="scanlines"></div>
+<div id="grain"></div>
+<div id="trace-bar"><div class="fill"></div></div>
+
+<div id="shell">
+
+  <!-- ================= LEFT: COMMAND DECK ================= -->
+  <aside id="deck">
+    <div class="deck-brand">
+      <div class="brand-mark">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="5" cy="6" r="2.3" fill="#fff"/>
+          <circle cx="19" cy="6" r="2.3" fill="#fff"/>
+          <circle cx="12" cy="18" r="2.3" fill="#fff"/>
+          <path d="M6.8 7.3 L11 16.3 M17.2 7.3 L13 16.3 M7.3 6 H16.7" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name" id="brand-name">NEXUS<span class="glitch-layer">NEXUS</span></div>
+        <div class="brand-sub">graph rag · command deck</div>
+      </div>
+    </div>
+
+    <div id="radar-wrap"><canvas id="radar-canvas"></canvas></div>
+    <div class="radar-caption"><span>16 nodes tracked</span><span id="radar-status">idle</span></div>
+
+    <div class="deck-stats">
+      <div class="stat-row"><span>Vector chunks</span><b>4,362</b></div>
+      <div class="meter"><i style="width:72%;"></i></div>
+      <div class="stat-row" style="margin-top:2px;"><span>Graph nodes</span><b>16 / 17 docs</b></div>
+      <div class="meter"><i style="width:48%;"></i></div>
+      <div class="stat-row" style="margin-top:2px;"><span>Latency</span><b id="latency-val">--</b></div>
+    </div>
+
+    <div class="deck-divider"></div>
+
+    <button class="new-session" onclick="createNewChat()">
+      <span style="display:flex; align-items:center; gap:8px;"><i data-lucide="plus" style="width:14px;height:14px;color:var(--ink-dim);"></i> New session</span>
+      <kbd>Ctrl N</kbd>
+    </button>
+
+    <div class="search-wrap">
+      <i data-lucide="search"></i>
+      <input id="chat-search" type="text" placeholder="Search chats..." oninput="filterThreads(this.value)">
+    </div>
+
+    <div class="section-label"><span>Threads</span><span id="thread-count">1</span></div>
+    <div id="chat-history-list">
+      <button class="thread-btn active" data-title="database & sql graph search">
+        <i data-lucide="message-square-code" class="t-icon" style="width:13px;height:13px;"></i>
+        <span>Database & SQL Graph Search</span>
+        <time>2m</time>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ================= RIGHT: CHAT ================= -->
+  <div id="main">
+    <div id="topstrip">
+      <div class="chip"><span class="dot live"></span> pipeline online</div>
+      <div class="chip">bge-base-en-v1.5</div>
+      <button class="icon-btn" title="Settings"><i data-lucide="settings-2"></i></button>
+    </div>
+
+    <div id="chat-window">
+      <div class="msg-row">
+        <div class="avatar ai"><i data-lucide="workflow" style="width:15px;height:15px;"></i></div>
+        <div class="bubble system">
+          <div class="msg-label ai">system orchestrator</div>
+          <div class="msg-text">I am an Academic Knowledge Assistant grounded exclusively in <strong>17 indexed textbooks</strong> covering AI, ML, Deep Learning, NLP, RAG, Reinforcement Learning, Neural Networks, LangChain, DBMS, SQL, DSA, Java, Python, Computer Networks, Operating Systems, Data Mining, and Theory of Computation.
+
+I will only answer from what is in these books — 4,362 indexed chunks linked into a 16-node concept graph. If your question is outside this corpus, I will tell you clearly.
+
+Select a textbook filter to narrow results, or ask freely across all 17 books.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="composer-wrap">
+      <form id="query-form">
+        <div class="composer">
+          <textarea id="query-input" rows="2" placeholder="Ask from the 17 textbooks — e.g. How does backpropagation work? What is normalization in DBMS?" required></textarea>
+          <div class="composer-tools">
+            <select id="source-filter-select" class="font-mono">
+              <option value="">All Textbooks</option>
+              <option value="(R17A1204) Artificial Intelligence.pdf">Artificial Intelligence</option>
+              <option value="Neural-Networks.pdf">Neural Networks (ANN)</option>
+              <option value="COMPUTER NETWORKS NOTES.pdf">Computer Networks</option>
+              <option value="DATA WAREHOUSING AND DATA MINING (R18A0524).pdf">Data Mining &amp; Warehousing</option>
+              <option value="DBMS.pdf">DBMS</option>
+              <option value="deep learning.pdf">Deep Learning</option>
+              <option value="DATA STRUCTURES DIGITAL NOTES.pdf">Data Structures (DSA)</option>
+              <option value="Java Programming.pdf">Java Programming</option>
+              <option value="LangChain_From_0_To_1_public_1_PpuSgEN.pdf">LangChain</option>
+              <option value="Introduction to Machine Learning with Python ( PDFDrive.com )-min.pdf">Machine Learning</option>
+              <option value="Natural Language Processing-1.pdf">NLP</option>
+              <option value="os.pdf">Operating Systems</option>
+              <option value="(R18A0513) Python Programming digital notes.pdf">Python Programming</option>
+              <option value="RAG.pdf">RAG</option>
+              <option value="RL.pdf">Reinforcement Learning</option>
+              <option value="SQL-Manual.pdf">SQL</option>
+              <option value="TOC.pdf">Theory of Computation</option>
+            </select>
+            <div class="kstep">
+              <span>top-k</span>
+              <button type="button" onclick="stepK(-1)"><i data-lucide="minus" style="width:11px;height:11px;"></i></button>
+              <b id="k-value" style="color:var(--ink); min-width:10px; text-align:center;">5</b>
+              <button type="button" onclick="stepK(1)"><i data-lucide="plus" style="width:11px;height:11px;"></i></button>
+            </div>
+          </div>
+          <button type="submit" class="submit-btn">Run query <i data-lucide="corner-down-left" style="width:12px;height:12px;"></i></button>
+        </div>
+      </form>
+      <p class="composer-hint">Sanitizes input &amp; resolves structural document matches before every trace.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+lucide.createIcons();
+
+/* ============ BRAND GLITCH ============ */
+const brandEl = document.getElementById('brand-name');
+function glitchBurst(){
+  brandEl.classList.add('glitching');
+  setTimeout(() => brandEl.classList.remove('glitching'), 340);
+  setTimeout(glitchBurst, 4000 + Math.random()*5000);
+}
+setTimeout(glitchBurst, 2200);
+
+/* ============ SIDEBAR SEARCH ============ */
+function filterThreads(q){
+  const list = document.getElementById('chat-history-list');
+  const items = Array.from(list.querySelectorAll('.thread-btn'));
+  const query = q.trim().toLowerCase();
+  let visible = 0;
+  items.forEach(btn => {
+    const match = btn.dataset.title.includes(query);
+    btn.style.display = match ? 'flex' : 'none';
+    if (match) visible++;
+  });
+  let empty = list.querySelector('.no-results');
+  if (visible === 0 && query.length){
+    if (!empty){
+      empty = document.createElement('div');
+      empty.className = 'no-results';
+      empty.textContent = 'No threads match "' + q + '"';
+      list.appendChild(empty);
+    } else { empty.textContent = 'No threads match "' + q + '"'; }
+  } else if (empty){ empty.remove(); }
+}
+
+/* ============ STATE ============ */
+let conversationHistory = [];
+let kValue = 5;
+function stepK(delta){
+  kValue = Math.min(6, Math.max(1, kValue + delta));
+  document.getElementById('k-value').textContent = kValue;
+}
+
+function createNewChat(){
+  document.getElementById('chat-window').innerHTML = `
+    <div class="msg-row">
+      <div class="avatar ai"><i data-lucide="workflow" style="width:15px;height:15px;"></i></div>
+      <div class="bubble system">
+        <div class="msg-label ai">system orchestrator</div>
+        <div class="msg-text">New session active. Ask a question to start tracing the graph.</div>
+      </div>
+    </div>`;
+  conversationHistory = [];
+  resetRadarHighlights();
+  lucide.createIcons();
+}
+document.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 'n'){ e.preventDefault(); createNewChat(); } });
+
+/* ============ CHAT SUBMIT ============ */
+document.getElementById('query-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const inputField = document.getElementById('query-input');
+  const chatWindow = document.getElementById('chat-window');
+  const traceBar = document.getElementById('trace-bar');
+  const queryText = inputField.value.trim();
+  if (!queryText) return;
+
+  chatWindow.insertAdjacentHTML('beforeend', `
+    <div class="msg-row user">
+      <div class="bubble user">
+        <div class="msg-label user">you</div>
+        <div class="msg-text">${escapeHtml(queryText)}</div>
+      </div>
+    </div>`);
+  inputField.value = '';
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  const loaderId = 'loader-' + Date.now();
+  chatWindow.insertAdjacentHTML('beforeend', `
+    <div id="${loaderId}" class="thinking">
+      <i data-lucide="loader-2" class="spin"></i>
+      <span>Tracing concept graph &middot; computing chunk similarity...</span>
+    </div>`);
+  lucide.createIcons();
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+  document.getElementById('radar-status').textContent = 'sweeping…';
+  traceBar.classList.add('active');
+  radarIntensity = 1;
+
+  const filterElement = document.getElementById('source-filter-select');
+  const selectedFilter = filterElement ? filterElement.value : "";
+
+  const t0 = performance.now();
+  let data;
+  try {
+    const response = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: queryText, k: kValue, source_filter: selectedFilter, history: conversationHistory.slice(-6) })
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    data = await response.json();
+  } catch (err) {
+    document.getElementById(loaderId)?.remove();
+    document.getElementById('radar-status').textContent = 'error';
+    traceBar.classList.remove('active');
+    radarIntensity = 0.3;
+    chatWindow.insertAdjacentHTML('beforeend', `
+      <div class="error-banner">
+        <i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0;"></i>
+        Backend unreachable: ${escapeHtml(err.message)}. Make sure python run.py is running.
+      </div>`);
+    lucide.createIcons();
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return;
+  }
+
+  document.getElementById(loaderId)?.remove();
+  document.getElementById('radar-status').textContent = 'resolved';
+  traceBar.classList.remove('active');
+  radarIntensity = 0.3;
+  const ms = Math.round(performance.now() - t0);
+  document.getElementById('latency-val').textContent = ms + 'ms';
+
+  if (data.error) {
+    chatWindow.insertAdjacentHTML('beforeend', `
+      <div class="error-banner">
+        <i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0;"></i>
+        ${escapeHtml(data.error)}
+      </div>`);
+    lucide.createIcons();
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return;
+  }
+
+  const chunks = data.context_chunks || [];
+  const msgId = 'msg-' + Date.now();
+  chatWindow.insertAdjacentHTML('beforeend', `
+    <div class="msg-row">
+      <div class="avatar ai"><i data-lucide="sparkles" style="width:15px;height:15px;"></i></div>
+      <div class="bubble system" id="${msgId}">
+        <div class="msg-label ai">agent synthesis</div>
+        <div class="msg-text">${renderMarkdown(data.answer || 'No answer returned.')}</div>
+        ${chunks.length ? `
+        <div class="sources-toggle" onclick="toggleSources('${msgId}')">
+          <i data-lucide="chevron-right" class="chevron"></i>
+          <i data-lucide="file-text" style="width:12px;height:12px;"></i>
+          <span>${chunks.length} source${chunks.length>1?'s':''} referenced</span>
+        </div>
+        <div class="sources-panel" id="${msgId}-panel">
+          ${chunks.map(c => `
+            <div class="snippet-card">
+              <div class="snippet-head">
+                <span class="snippet-src">${escapeHtml(c.source_file || 'unknown.pdf')}</span>
+                <span class="snippet-conf">${c.confidence || 70}% match</span>
+              </div>
+              <p class="snippet-preview">${escapeHtml(c.preview || '')}</p>
+              <div class="conf-meter"><i style="width:${c.confidence || 70}%;"></i></div>
+            </div>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>`);
+
+  attachCopyButtons(document.getElementById(msgId));
+
+  conversationHistory.push({ role: 'user', content: queryText });
+  conversationHistory.push({ role: 'assistant', content: data.answer || '' });
+  if (conversationHistory.length > 12) conversationHistory = conversationHistory.slice(-12);
+
+  pulseRadar(chunks.length || 2);
+
+  const historyList = document.getElementById('chat-history-list');
+  document.querySelectorAll('.thread-btn').forEach(b => b.classList.remove('active'));
+  if (historyList.querySelectorAll('.thread-btn').length < 8){
+    const short = queryText.length > 30 ? queryText.slice(0,30) + '…' : queryText;
+    historyList.insertAdjacentHTML('afterbegin', `
+      <button class="thread-btn active" data-title="${short.toLowerCase()}">
+        <i data-lucide="message-square" class="t-icon" style="width:13px;height:13px;"></i>
+        <span>${escapeHtml(short)}</span>
+        <time>now</time>
+      </button>`);
+    document.getElementById('thread-count').textContent = historyList.querySelectorAll('.thread-btn').length;
+  }
+
+  lucide.createIcons();
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+});
+
+function toggleSources(msgId){
+  const toggle = document.querySelector(`#${msgId} .sources-toggle`);
+  const panel = document.getElementById(msgId + '-panel');
+  toggle.classList.toggle('open');
+  panel.classList.toggle('open');
+}
+
+function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+function renderMarkdown(text){
+  let html = escapeHtml(text);
+  html = html.replace(/```([\s\S]*?)```/g, (_, c) => `<pre><code>${c.trim()}</code></pre>`);
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  html = html.replace(/^(\* |- )(.+)$/gm, '<li>$2</li>');
+  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/\n{2,}/g, '</p><p>');
+  html = html.replace(/\n/g, '<br>');
+  return '<p>' + html + '</p>';
+}
+
+function attachCopyButtons(scopeEl){
+  if (!scopeEl) return;
+  scopeEl.querySelectorAll('pre').forEach(pre => {
+    if (pre.querySelector('.copy-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn';
+    btn.innerHTML = '<i data-lucide="copy" style="width:10px;height:10px;"></i><span>copy</span>';
+    btn.addEventListener('click', () => {
+      const code = pre.querySelector('code');
+      navigator.clipboard.writeText(code ? code.textContent : pre.textContent).then(() => {
+        const label = btn.querySelector('span');
+        const prev = label.textContent;
+        label.textContent = 'copied';
+        setTimeout(() => { label.textContent = prev; }, 1400);
+      });
+    });
+    pre.appendChild(btn);
+  });
+  lucide.createIcons();
+}
+
+/* ============ SIGNATURE ELEMENT: RADAR SWEEP ============ */
+const radarCanvas = document.getElementById('radar-canvas');
+const rctx = radarCanvas.getContext('2d');
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let radarBlips = [];
+let sweepAngle = 0;
+let radarIntensity = 0.3;
+
+function initRadar(){
+  const wrap = document.getElementById('radar-wrap');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  radarCanvas.width = w * devicePixelRatio;
+  radarCanvas.height = h * devicePixelRatio;
+  rctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const N = 16;
+  radarBlips = Array.from({length:N}).map((_,i) => ({
+    angle: (i / N) * Math.PI * 2 + Math.random()*0.3,
+    radius: (0.35 + Math.random()*0.6) * (w/2 - 14),
+    lit: 0
+  }));
+}
+
+function drawRadar(){
+  const wrap = document.getElementById('radar-wrap');
+  if (!wrap) return;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  const cx = w/2, cy = h/2, R = w/2 - 6;
+  rctx.clearRect(0,0,w,h);
+
+  // rings
+  for (let i=1;i<=3;i++){
+    rctx.beginPath();
+    rctx.arc(cx, cy, R*i/3, 0, Math.PI*2);
+    rctx.strokeStyle = 'rgba(255,10,63,.18)';
+    rctx.lineWidth = 1;
+    rctx.stroke();
+  }
+  // crosshair
+  rctx.beginPath();
+  rctx.moveTo(cx-R, cy); rctx.lineTo(cx+R, cy);
+  rctx.moveTo(cx, cy-R); rctx.lineTo(cx, cy+R);
+  rctx.strokeStyle = 'rgba(255,10,63,.12)';
+  rctx.lineWidth = 1;
+  rctx.stroke();
+
+  // sweep wedge
+  const grad = rctx.createConicGradient ? rctx.createConicGradient(sweepAngle - Math.PI/2, cx, cy) : null;
+  rctx.save();
+  rctx.beginPath();
+  rctx.moveTo(cx, cy);
+  rctx.arc(cx, cy, R, sweepAngle - 0.5, sweepAngle);
+  rctx.closePath();
+  const wedgeGrad = rctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  wedgeGrad.addColorStop(0, 'rgba(255,10,63,' + (0.28*radarIntensity+0.08) + ')');
+  wedgeGrad.addColorStop(1, 'rgba(255,10,63,0)');
+  rctx.fillStyle = wedgeGrad;
+  rctx.fill();
+  rctx.restore();
+
+  // sweep line
+  const lx = cx + Math.cos(sweepAngle)*R, ly = cy + Math.sin(sweepAngle)*R;
+  rctx.beginPath();
+  rctx.moveTo(cx, cy);
+  rctx.lineTo(lx, ly);
+  rctx.strokeStyle = '#ff2d55';
+  rctx.lineWidth = 1.4;
+  rctx.shadowColor = '#ff0a3f';
+  rctx.shadowBlur = 10;
+  rctx.stroke();
+  rctx.shadowBlur = 0;
+
+  // blips
+  const now = performance.now();
+  radarBlips.forEach(b => {
+    const x = cx + Math.cos(b.angle) * b.radius;
+    const y = cy + Math.sin(b.angle) * b.radius;
+    let diff = ((sweepAngle - b.angle) % (Math.PI*2) + Math.PI*2) % (Math.PI*2);
+    if (diff < 0.5 && b.lit < now) b.lit = now + 1400 + Math.random()*600;
+    const active = b.lit > now;
+    rctx.beginPath();
+    rctx.arc(x, y, active ? 3.6 : 2.2, 0, Math.PI*2);
+    rctx.fillStyle = active ? '#ffffff' : '#ff0a3f';
+    rctx.shadowColor = active ? '#ffffff' : '#ff0a3f';
+    rctx.shadowBlur = active ? 12 : 3;
+    rctx.globalAlpha = active ? 1 : 0.65;
+    rctx.fill();
+  });
+  rctx.shadowBlur = 0;
+  rctx.globalAlpha = 1;
+
+  // center dot
+  rctx.beginPath();
+  rctx.arc(cx, cy, 3, 0, Math.PI*2);
+  rctx.fillStyle = '#fff';
+  rctx.shadowColor = '#ff0a3f';
+  rctx.shadowBlur = 10;
+  rctx.fill();
+  rctx.shadowBlur = 0;
+}
+
+function stepRadar(){
+  sweepAngle += 0.012 * (1 + radarIntensity*0.8);
+  radarIntensity += (0.3 - radarIntensity) * 0.02;
+  drawRadar();
+  if (!reducedMotion) requestAnimationFrame(stepRadar);
+}
+
+function pulseRadar(count){
+  const now = performance.now();
+  const shuffled = [...radarBlips].sort(() => Math.random()-0.5).slice(0, Math.min(count+2, radarBlips.length));
+  shuffled.forEach((b,i) => { b.lit = now + 1600 + i*250; });
+  radarIntensity = 1;
+}
+
+function resetRadarHighlights(){
+  radarBlips.forEach(b => b.lit = 0);
+  drawRadar();
+}
+
+window.addEventListener('resize', () => { initRadar(); drawRadar(); });
+initRadar(); drawRadar();
+if (!reducedMotion) requestAnimationFrame(stepRadar);
 </script>
 </body>
 </html>
